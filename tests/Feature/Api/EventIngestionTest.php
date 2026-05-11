@@ -1,5 +1,8 @@
 <?php
 
+use App\Events\BossKilled;
+use App\Events\BossSpawned;
+use App\Events\HitDealt;
 use App\Models\Boss;
 use App\Models\Event;
 use App\Models\User;
@@ -33,4 +36,40 @@ test('records a non-Stop event and updates last_event_at', function () {
         ->and($event->raw_payload['cwd'])->toBe('/home/dev/project');
 
     expect($this->user->fresh()->last_event_at)->not->toBeNull();
+});
+
+test('Stop event with tokens damages the current boss and broadcasts HitDealt', function () {
+    Illuminate\Support\Facades\Event::fake([HitDealt::class]);
+
+    $this->withHeader('Authorization', 'Bearer tok')
+        ->postJson('/api/events', [
+            'hook_event_name' => 'Stop',
+            'session_id' => 'sess-1',
+            'tokens' => 250_000,
+        ])
+        ->assertCreated();
+
+    $boss = Boss::sole();
+    expect($boss->current_hp)->toBe(750_000);
+
+    Illuminate\Support\Facades\Event::assertDispatched(HitDealt::class, function ($e) {
+        return $e->damage === 250_000 && $e->boss->current_hp === 750_000;
+    });
+});
+
+test('Stop event killing the boss broadcasts BossKilled then BossSpawned', function () {
+    Boss::query()->delete();
+    Boss::factory()->create(['number' => 1, 'max_hp' => 100, 'current_hp' => 100]);
+    Illuminate\Support\Facades\Event::fake([
+        HitDealt::class,
+        BossKilled::class,
+        BossSpawned::class,
+    ]);
+
+    $this->withHeader('Authorization', 'Bearer tok')
+        ->postJson('/api/events', ['hook_event_name' => 'Stop', 'tokens' => 350])
+        ->assertCreated();
+
+    Illuminate\Support\Facades\Event::assertDispatched(BossKilled::class);
+    Illuminate\Support\Facades\Event::assertDispatched(BossSpawned::class);
 });
