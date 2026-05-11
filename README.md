@@ -1,3 +1,64 @@
+# AI Boss Raid Game
+
+A cooperative idle boss raid for your team. Each AI token your coding agents
+spend (Claude Code, Codex, etc.) becomes damage against the current boss.
+Watch hits land in real time on the battlefield, defeat bosses together,
+and celebrate kills in Slack.
+
+## Game setup
+
+### Local setup
+
+```bash
+composer install
+npm install
+cp .env.example .env
+php artisan key:generate
+touch database/database.sqlite
+php artisan migrate
+```
+
+Fill in the required env vars (below), then start everything:
+
+```bash
+composer run dev
+```
+
+`composer run dev` runs the Laravel server, queue worker, log tail, Reverb
+(WebSockets), and Vite together. That is the only command you need locally.
+
+### Required env vars
+
+| Var | Notes |
+| --- | --- |
+| `SLACK_CLIENT_ID` | From your Slack app's OAuth credentials. |
+| `SLACK_CLIENT_SECRET` | Same Slack app. |
+| `SLACK_REDIRECT_URI` | Typically `${APP_URL}/auth/slack/callback`. |
+| `SLACK_KILL_WEBHOOK_URL` | Optional. Incoming webhook for the channel that gets boss-kill announcements. |
+| `GAME_BASE_HP` | Optional. Boss starting HP. Defaults to `1000000`. |
+| `GAME_IDLE_MINUTES` | Optional. Minutes of inactivity before a fighter is swept off the battlefield. Defaults to `30`. |
+
+### New-developer onboarding
+
+1. Open `/profile` in a browser.
+2. Click **Sign in with Slack**.
+3. Copy the displayed *Claude Code hook config* snippet.
+4. Paste it into `~/.claude/settings.json` (merge with existing keys if any).
+5. If you use Codex too, repeat with the *Codex hook config* snippet into
+   `~/.codex/config.toml`.
+6. Done. Open `/battlefield` and watch your hits register as you work.
+
+### Pages
+
+| Path | Description |
+| --- | --- |
+| `/` | Landing page. |
+| `/battlefield` | Live battle view. Public. |
+| `/history` | Defeated bosses. Public. |
+| `/profile` | Your hook token and agent snippets. Slack login required. |
+
+---
+
 <p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
 
 <p align="center">
