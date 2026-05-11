@@ -1,0 +1,48 @@
+<?php
+
+use App\Events\BossKilled;
+use App\Events\BossSpawned;
+use App\Events\FighterCharging;
+use App\Events\FighterIdled;
+use App\Events\FighterJoined;
+use App\Events\HitDealt;
+use App\Models\Boss;
+use App\Models\User;
+use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+
+uses(RefreshDatabase::class);
+
+test('HitDealt broadcasts on the battlefield channel with expected payload', function () {
+    $user = User::factory()->create();
+    $boss = Boss::factory()->create(['number' => 1]);
+    $event = new HitDealt($user, 1234, $boss);
+
+    expect($event->broadcastOn()[0]->name)->toBe('battlefield')
+        ->and($event->broadcastAs())->toBe('HitDealt')
+        ->and($event->broadcastWith())->toMatchArray([
+            'user_id' => $user->id,
+            'damage' => 1234,
+            'boss_id' => $boss->id,
+        ]);
+});
+
+test('every battlefield event broadcasts now on the battlefield channel with a short broadcastAs name', function () {
+    $user = User::factory()->create();
+    $boss = Boss::factory()->create();
+
+    $events = [
+        'HitDealt' => new HitDealt($user, 1, $boss),
+        'BossKilled' => new BossKilled($boss, $user),
+        'BossSpawned' => new BossSpawned($boss),
+        'FighterCharging' => new FighterCharging($user),
+        'FighterJoined' => new FighterJoined($user),
+        'FighterIdled' => new FighterIdled($user),
+    ];
+
+    foreach ($events as $shortName => $event) {
+        expect($event)->toBeInstanceOf(ShouldBroadcastNow::class)
+            ->and($event->broadcastOn()[0]->name)->toBe('battlefield')
+            ->and($event->broadcastAs())->toBe($shortName);
+    }
+});
