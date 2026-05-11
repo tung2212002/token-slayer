@@ -3,19 +3,31 @@
         hp: {{ $boss?->current_hp ?? 0 }},
         max: {{ $boss?->max_hp ?? 1 }},
         damageEvents: [],
+        isShaking: false,
+        isFlashing: false,
     }"
     x-init="
         if (window.Echo) {
             window.Echo.channel('battlefield')
-                .listen('.HitDealt', e => { hp = e.boss_hp_after; damageEvents.unshift(e); damageEvents = damageEvents.slice(0, 10); })
-                .listen('.BossSpawned', e => { hp = e.max_hp; max = e.max_hp; });
+                .listen('.HitDealt', e => {
+                    hp = e.boss_hp_after;
+                    damageEvents.unshift(e);
+                    damageEvents = damageEvents.slice(0, 10);
+                    isShaking = true;
+                    setTimeout(() => isShaking = false, 200);
+                })
+                .listen('.BossSpawned', e => { hp = e.max_hp; max = e.max_hp; })
+                .listen('.BossKilled', () => {
+                    isFlashing = true;
+                    setTimeout(() => isFlashing = false, 600);
+                });
         }
     "
     class="relative min-h-screen bg-slate-950 text-white"
 >
     @if ($boss)
         <div class="absolute inset-0 flex flex-col items-center justify-center gap-4">
-            <h2 class="text-3xl font-bold">Boss #{{ $boss->number }}</h2>
+            <h2 class="text-3xl font-bold" :class="{ 'shake': isShaking }">Boss #{{ $boss->number }}</h2>
             <div class="w-96 h-4 bg-slate-700 rounded">
                 <div class="h-4 bg-red-500 rounded" :style="`width: ${(hp / max) * 100}%`" style="width: {{ ($boss->current_hp / $boss->max_hp) * 100 }}%"></div>
             </div>
@@ -31,4 +43,6 @@
             </div>
         @endforeach
     </div>
+
+    <div x-show="isFlashing" class="absolute inset-0 bg-white pointer-events-none flash" style="display: none;"></div>
 </div>
