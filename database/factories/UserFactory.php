@@ -30,6 +30,11 @@ class UserFactory extends Factory
             'email_verified_at' => now(),
             'password' => static::$password ??= Hash::make('password'),
             'remember_token' => Str::random(10),
+            'slack_user_id' => 'U'.fake()->unique()->bothify('#########'),
+            'slack_handle' => fake()->userName(),
+            'display_name' => fake()->name(),
+            'avatar_url' => 'https://avatars.example/'.fake()->uuid().'.png',
+            'hook_token' => hash('sha256', Str::random(48)),
         ];
     }
 
