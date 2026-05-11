@@ -18,6 +18,7 @@ return new class extends Migration
             $table->string('avatar_url')->nullable()->after('display_name');
             $table->string('hook_token')->nullable()->after('avatar_url'); // stores hash
             $table->timestampTz('last_event_at')->nullable()->after('hook_token');
+            $table->string('password')->nullable()->change();
         });
     }
 
