@@ -18,3 +18,13 @@ test('battlefield component renders the current boss and active fighters', funct
         ->assertSee($fighter->slack_handle)
         ->assertSet('boss.id', $boss->id);
 });
+
+test('battlefield spawns boss #1 when no alive boss exists', function () {
+    expect(Boss::count())->toBe(0);
+
+    Livewire::test(Battlefield::class)
+        ->assertSee('Boss #1')
+        ->assertSet('boss.number', 1);
+
+    expect(Boss::where('status', 'alive')->count())->toBe(1);
+});

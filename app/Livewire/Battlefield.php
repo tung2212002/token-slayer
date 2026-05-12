@@ -4,17 +4,18 @@ namespace App\Livewire;
 
 use App\Models\Boss;
 use App\Models\User;
+use App\Services\BossArena;
 use Livewire\Component;
 
 class Battlefield extends Component
 {
-    public ?Boss $boss = null;
+    public Boss $boss;
 
     public $fighters = [];
 
-    public function mount(): void
+    public function mount(BossArena $arena): void
     {
-        $this->boss = Boss::where('status', 'alive')->orderByDesc('number')->first();
+        $this->boss = $arena->current();
         $this->fighters = User::where('last_event_at', '>=', now()->subMinutes(config('game.idle_minutes')))
             ->get();
     }
