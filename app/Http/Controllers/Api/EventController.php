@@ -43,25 +43,25 @@ class EventController extends Controller
         $user->forceFill(['last_event_at' => now()])->save();
 
         if ($eventType === 'user-prompt-submit') {
-            event(new FighterCharging($user));
+            $this->dispatchSafely(new FighterCharging($user));
         }
 
         if ($eventType === 'session-start') {
-            event(new FighterJoined($user));
+            $this->dispatchSafely(new FighterJoined($user));
         }
 
         if ($eventType === 'stop' && $tokens > 0) {
             $result = $this->damage->apply($user, $tokens);
 
             foreach ($result->killedBosses as $killed) {
-                event(new BossKilled($killed, $user));
+                $this->dispatchSafely(new BossKilled($killed, $user));
             }
 
             if (! empty($result->killedBosses)) {
-                event(new BossSpawned($result->boss));
+                $this->dispatchSafely(new BossSpawned($result->boss));
             }
 
-            event(new HitDealt($user, $tokens, $result->boss));
+            $this->dispatchSafely(new HitDealt($user, $tokens, $result->boss));
         }
 
         return response()->json(['ok' => true], 201);
@@ -70,5 +70,14 @@ class EventController extends Controller
     private function normalizeEventType(string $hookName): string
     {
         return strtolower(preg_replace('/([a-z])([A-Z])/', '$1-$2', $hookName));
+    }
+
+    /**
+     * Broadcasts are best-effort: the damage transaction has already committed,
+     * so a downed websocket or misconfigured driver must not 500 the hook.
+     */
+    private function dispatchSafely(object $event): void
+    {
+        rescue(fn () => event($event));
     }
 }

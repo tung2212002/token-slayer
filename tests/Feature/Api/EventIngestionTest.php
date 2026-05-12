@@ -57,6 +57,22 @@ test('Stop event with tokens damages the current boss and broadcasts HitDealt', 
     });
 });
 
+test('Stop event still applies damage when a broadcast listener throws', function () {
+    Illuminate\Support\Facades\Event::listen(HitDealt::class, function () {
+        throw new RuntimeException('simulated broadcast failure');
+    });
+
+    $this->withHeader('Authorization', 'Bearer tok')
+        ->postJson('/api/events', [
+            'hook_event_name' => 'Stop',
+            'session_id' => 'sess-broadcast-down',
+            'tokens' => 100_000,
+        ])
+        ->assertCreated();
+
+    expect(Boss::sole()->current_hp)->toBe(900_000);
+});
+
 test('Stop event killing the boss broadcasts BossKilled then BossSpawned', function () {
     Boss::query()->delete();
     Boss::factory()->create(['number' => 1, 'max_hp' => 100, 'current_hp' => 100]);
