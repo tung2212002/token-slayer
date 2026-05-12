@@ -19,23 +19,38 @@ class SlackController extends Controller
     public function callback(): RedirectResponse
     {
         $slack = Socialite::driver('slack')->user();
-        $plainToken = Str::random(48);
 
-        $user = User::updateOrCreate(
-            ['slack_user_id' => $slack->getId()],
-            [
+        $user = User::where('slack_user_id', $slack->getId())->first();
+
+        if ($user === null) {
+            $plainToken = Str::random(48);
+
+            $user = User::create([
+                'slack_user_id' => $slack->getId(),
                 'name' => $slack->getName() ?? $slack->getNickname(),
                 'email' => $slack->getEmail() ?? $slack->getId().'@slack.local',
                 'slack_handle' => $slack->getNickname(),
                 'display_name' => $slack->getName(),
                 'avatar_url' => $slack->getAvatar(),
                 'hook_token' => hash('sha256', $plainToken),
-            ]
-        );
+            ]);
 
-        session()->put('hook_token_plain', $plainToken);
+            session()->put('hook_token_plain', $plainToken);
+            auth()->login($user);
+
+            return redirect()->route('profile');
+        }
+
+        $user->update([
+            'name' => $slack->getName() ?? $slack->getNickname(),
+            'email' => $slack->getEmail() ?? $slack->getId().'@slack.local',
+            'slack_handle' => $slack->getNickname(),
+            'display_name' => $slack->getName(),
+            'avatar_url' => $slack->getAvatar(),
+        ]);
+
         auth()->login($user);
 
-        return redirect('/profile');
+        return redirect()->route('battlefield');
     }
 }
