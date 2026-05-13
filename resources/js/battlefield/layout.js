@@ -24,12 +24,12 @@ export function rowsNeeded(count, perRow = 14) {
 export function fighterDisplayConfig(count, mode = 'landscape') {
   if (mode === 'portrait') {
     if (count <= 8) {
-      return { displaySize: 28, bottomY: 460, rowSpacing: 32, showHandle: true, perRow: 8 };
+      return { displaySize: 28, bottomY: 410, rowSpacing: 32, showHandle: true, perRow: 8 };
     }
     if (count <= 24) {
-      return { displaySize: 22, bottomY: 460, rowSpacing: 26, showHandle: false, perRow: 8 };
+      return { displaySize: 22, bottomY: 410, rowSpacing: 26, showHandle: false, perRow: 8 };
     }
-    return { displaySize: 18, bottomY: 470, rowSpacing: 22, showHandle: false, perRow: 10 };
+    return { displaySize: 18, bottomY: 420, rowSpacing: 22, showHandle: false, perRow: 10 };
   }
   if (count <= 14) {
     return { displaySize: 24, bottomY: 230, rowSpacing: 27, showHandle: true, perRow: 14 };

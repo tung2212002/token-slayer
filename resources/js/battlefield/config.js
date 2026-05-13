@@ -12,8 +12,8 @@ export const LAYOUTS = {
     logicalWidth: 270,
     logicalHeight: 480,
     boss: { anchor: { x: 135, y: 140 }, scale: 2.5, name: { x: 135, y: 50 } },
-    hpBar: { x: 135, y: 230, width: 200, height: 6 },
-    fighters: { rowXRange: [25, 245], rowY: 460, perRowMax: 10 },
+    hpBar: { x: 135, y: 230, width: 140, height: 6 },
+    fighters: { rowXRange: [25, 245], rowY: 410, perRowMax: 10 },
   },
 };
 
