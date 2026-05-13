@@ -82,6 +82,7 @@ export class BattlefieldScene extends Phaser.Scene {
     state.fighters.forEach((f, i) => this.addFighter(f, positions[i]));
 
     this.events.emit('ready');
+    this.game.events.emit('ready');
   }
 
   async loadAvatarTexture(fighter) {
