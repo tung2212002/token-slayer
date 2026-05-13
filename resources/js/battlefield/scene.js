@@ -123,6 +123,7 @@ export class BattlefieldScene extends Phaser.Scene {
     this.charges = new Map();
     bus.on('fighter-charging', payload => this.handleCharging(payload));
     bus.on('fighter-idled', payload => this.handleIdled(payload));
+    bus.on('fighter-joined', payload => this.handleFighterJoined(payload));
 
     this.events.emit('ready');
     this.game.events.emit('ready');
@@ -261,6 +262,49 @@ export class BattlefieldScene extends Phaser.Scene {
       this.load.start();
     });
     return key;
+  }
+
+  async handleFighterJoined(payload) {
+    if (this.fighters.has(payload.user_id)) {
+      return;
+    }
+    const fighter = {
+      id: payload.user_id,
+      handle: payload.slack_handle,
+      avatarUrl: payload.avatar_url,
+    };
+
+    // Recompute positions for the new count.
+    const count = this.fighters.size + 1;
+    const positions = computeFighterPositions(count, FIGHTER_ROW_X_RANGE, FIGHTER_ROW_Y);
+
+    // Tween existing fighters to their new slots.
+    let i = 0;
+    for (const entry of this.fighters.values()) {
+      const target = positions[i++];
+      this.tweens.add({
+        targets: [entry.sprite, entry.handle],
+        x: target.x,
+        duration: 200,
+        ease: 'Quad.easeOut',
+      });
+      entry.pos = target;
+    }
+
+    const newPos = positions[positions.length - 1];
+    await this.addFighter(fighter, newPos);
+    const entry = this.fighters.get(fighter.id);
+    if (!entry) {
+      return; // load failed; addFighter already warned
+    }
+    const finalScale = entry.sprite.scaleX;
+    entry.sprite.setScale(0);
+    this.tweens.add({
+      targets: entry.sprite,
+      scale: finalScale,
+      duration: TIMINGS.fighterJoinMs,
+      ease: 'Back.easeOut',
+    });
   }
 
   async addFighter(fighter, pos) {
