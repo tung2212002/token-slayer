@@ -8,6 +8,7 @@ import {
   BOSS_NAME,
   FIGHTER_ROW_X_RANGE,
   FIGHTER_ROW_Y,
+  TIMINGS,
 } from './config.js';
 import { computeFighterPositions } from './layout.js';
 import { bus } from './bus.js';
@@ -36,6 +37,8 @@ export class BattlefieldScene extends Phaser.Scene {
 
   create() {
     this.add.rectangle(LOGICAL_WIDTH / 2, LOGICAL_HEIGHT / 2, LOGICAL_WIDTH, LOGICAL_HEIGHT, BG_COLOR);
+
+    this.makeChargeRingTexture();
 
     const state = this.game.registry.get('initialState');
     this.bossState = { ...state.boss };
@@ -94,15 +97,82 @@ export class BattlefieldScene extends Phaser.Scene {
 
     bus.on('hit', payload => this.handleHit(payload));
 
+    this.charges = new Map();
+    bus.on('fighter-charging', payload => this.handleCharging(payload));
+    bus.on('fighter-idled', payload => this.handleIdled(payload));
+
     this.events.emit('ready');
     this.game.events.emit('ready');
   }
 
+  makeChargeRingTexture() {
+    if (this.textures.exists('charge-ring')) {
+      return;
+    }
+    const g = this.make.graphics({ x: 0, y: 0, add: false });
+    g.lineStyle(2, 0x22d3ee, 1);
+    g.strokeCircle(12, 12, 10);
+    g.generateTexture('charge-ring', 24, 24);
+    g.destroy();
+  }
+
   handleHit(payload) {
+    this.clearCharge(payload.user_id);
     const fighter = this.fighters.get(payload.user_id);
     const fromX = fighter ? fighter.pos.x : LOGICAL_WIDTH / 2;
     const fromY = fighter ? fighter.pos.y : LOGICAL_HEIGHT / 2;
     spawnProjectile(this, fromX, fromY, () => applyImpact(this, payload.boss_hp_after));
+  }
+
+  handleCharging(payload) {
+    const fighter = this.fighters.get(payload.user_id);
+    if (!fighter) {
+      return;
+    }
+    if (this.charges.has(payload.user_id)) {
+      return;
+    }
+    const ring = this.add
+      .image(fighter.pos.x, fighter.pos.y, 'charge-ring')
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setAlpha(0.4);
+    const pulse = this.tweens.add({
+      targets: ring,
+      alpha: 0.9,
+      duration: TIMINGS.chargeRingPulseMs / 2,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+    const breath = this.tweens.add({
+      targets: fighter.sprite,
+      scaleY: fighter.sprite.scaleY * 1.05,
+      duration: TIMINGS.chargeRingPulseMs / 2,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+    this.charges.set(payload.user_id, { ring, pulse, breath });
+  }
+
+  handleIdled(payload) {
+    this.clearCharge(payload.user_id);
+  }
+
+  clearCharge(userId) {
+    const entry = this.charges.get(userId);
+    if (!entry) {
+      return;
+    }
+    entry.pulse.stop();
+    entry.breath.stop();
+    this.tweens.add({
+      targets: entry.ring,
+      alpha: 0,
+      duration: 200,
+      onComplete: () => entry.ring.destroy(),
+    });
+    this.charges.delete(userId);
   }
 
   async loadAvatarTexture(fighter) {
