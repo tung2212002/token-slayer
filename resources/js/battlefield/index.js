@@ -12,14 +12,21 @@ const ECHO_EVENT_MAP = {
   FighterIdled: 'fighter-idled',
 };
 
+let echoChannel = null;
+
 function subscribeEcho() {
   if (!window.Echo) {
     console.warn('[battlefield] window.Echo not available; events will not be received');
     return;
   }
-  const channel = window.Echo.channel('battlefield');
+  if (echoChannel) {
+    for (const evt of Object.keys(ECHO_EVENT_MAP)) {
+      echoChannel.stopListening('.' + evt);
+    }
+  }
+  echoChannel = window.Echo.channel('battlefield');
   for (const [evt, key] of Object.entries(ECHO_EVENT_MAP)) {
-    channel.listen('.' + evt, payload => bus.emit(key, payload));
+    echoChannel.listen('.' + evt, payload => bus.emit(key, payload));
   }
 }
 
@@ -27,8 +34,7 @@ export function detectMode() {
   return window.innerWidth < window.innerHeight ? 'portrait' : 'landscape';
 }
 
-export function bootBattlefield(mount, state) {
-  const mode = detectMode();
+function bootGame(mount, state, mode) {
   const layout = LAYOUTS[mode];
   const game = new Phaser.Game({
     type: Phaser.AUTO,
@@ -43,7 +49,7 @@ export function bootBattlefield(mount, state) {
   game.registry.set('initialState', state);
   game.registry.set('mode', mode);
 
-  const onReady = () => {
+  game.events.once('ready', () => {
     subscribeEcho();
     const scene = game.scene.getScene('battlefield');
     window.__battlefield = {
@@ -54,10 +60,33 @@ export function bootBattlefield(mount, state) {
       bossHp: () => scene.bossState?.currentHp,
       bossMaxHp: () => scene.bossState?.maxHp,
     };
-  };
-  game.events.once('ready', onReady);
+  });
 
   return game;
+}
+
+export function bootBattlefield(mount, state) {
+  let currentMode = detectMode();
+  let currentGame = bootGame(mount, state, currentMode);
+  let pending = null;
+
+  const onResize = () => {
+    clearTimeout(pending);
+    pending = setTimeout(() => {
+      const next = detectMode();
+      if (next === currentMode) {
+        return;
+      }
+      currentMode = next;
+      currentGame.destroy(true);
+      currentGame = bootGame(mount, state, currentMode);
+    }, 200);
+  };
+
+  window.addEventListener('resize', onResize);
+  window.addEventListener('orientationchange', onResize);
+
+  return currentGame;
 }
 
 window.bootBattlefield = bootBattlefield;
