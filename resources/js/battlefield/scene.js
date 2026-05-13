@@ -101,9 +101,9 @@ export class BattlefieldScene extends Phaser.Scene {
       .setOrigin(0, 0.5);
 
     this.hpText = this.add
-      .text(HP_BAR.x, HP_BAR.y + 10, `${state.boss.currentHp} / ${state.boss.maxHp}`, {
+      .text(HP_BAR.x, HP_BAR.y + 8, `${state.boss.currentHp} / ${state.boss.maxHp}`, {
         fontFamily: 'monospace',
-        fontSize: '10px',
+        fontSize: '7px',
         color: '#cbd5e1',
       })
       .setOrigin(0.5)
