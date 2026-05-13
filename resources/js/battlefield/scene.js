@@ -88,8 +88,7 @@ export class BattlefieldScene extends Phaser.Scene {
 
     this.hpBarBg = this.add
       .rectangle(L.hpBar.x, L.hpBar.y, L.hpBar.width, L.hpBar.height, 0x334155)
-      .setOrigin(0.5)
-      .setStrokeStyle(1, 0x94a3b8, 1);
+      .setOrigin(0.5);
 
     this.hpBarFill = this.add
       .rectangle(
@@ -100,6 +99,12 @@ export class BattlefieldScene extends Phaser.Scene {
         0xef4444
       )
       .setOrigin(0, 0.5);
+
+    this.hpBarBorder = this.add
+      .rectangle(L.hpBar.x, L.hpBar.y, L.hpBar.width, L.hpBar.height)
+      .setOrigin(0.5)
+      .setFillStyle()
+      .setStrokeStyle(1, 0x94a3b8, 1);
 
     this.hpText = this.addSharpText(L.hpBar.x, L.hpBar.y + 12, `${formatHp(state.boss.currentHp)} / ${formatHp(state.boss.maxHp)}`, {
       fontFamily: 'monospace',
