@@ -101,7 +101,7 @@ export class BattlefieldScene extends Phaser.Scene {
       .rectangle(
         HP_BAR.x - HP_BAR.width / 2,
         HP_BAR.y,
-        HP_BAR.width * (state.boss.currentHp / state.boss.maxHp),
+        Math.round(HP_BAR.width * (state.boss.currentHp / state.boss.maxHp)),
         HP_BAR.height,
         0xef4444
       )

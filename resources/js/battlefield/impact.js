@@ -39,20 +39,16 @@ export function applyImpact(scene, hpAfter) {
   }
 
   const max = scene.bossState.maxHp;
-  const targetWidth = HP_BAR.width * (hpAfter / max);
-  scene.tweens.add({
-    targets: scene.hpBarFill,
-    width: targetWidth,
-    duration: TIMINGS.hpBarMs,
-    ease: 'Quad.easeOut',
-  });
   const counter = { v: scene.bossState.currentHp };
   scene.tweens.add({
     targets: counter,
     v: hpAfter,
     duration: TIMINGS.hpBarMs,
     ease: 'Quad.easeOut',
-    onUpdate: () => scene.hpText.setText(`${formatHp(counter.v)} / ${formatHp(max)}`),
+    onUpdate: () => {
+      scene.hpBarFill.width = Math.round(HP_BAR.width * (counter.v / max));
+      scene.hpText.setText(`${formatHp(counter.v)} / ${formatHp(max)}`);
+    },
   });
   scene.bossState.currentHp = hpAfter;
 }
