@@ -4,8 +4,8 @@ export const LAYOUTS = {
   landscape: {
     logicalWidth: 480,
     logicalHeight: 270,
-    boss: { anchor: { x: 240, y: 110 }, scale: 2, name: { x: 240, y: 70 } },
-    hpBar: { x: 240, y: 170, width: 100, height: 6 },
+    boss: { anchor: { x: 240, y: 90 }, scale: 2, name: { x: 240, y: 50 } },
+    hpBar: { x: 240, y: 150, width: 100, height: 6 },
     fighters: { rowXRange: [40, 440], rowY: 230, perRowMax: 14 },
   },
   portrait: {
