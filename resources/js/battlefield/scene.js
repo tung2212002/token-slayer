@@ -308,7 +308,8 @@ export class BattlefieldScene extends Phaser.Scene {
       entry.bubble.setActivity(activity);
       return;
     }
-    entry.bubble = this.createActivityBubble(fighter.pos.x, fighter.pos.y - 22, activity);
+    const bubbleY = fighter.pos.y - (fighter.displaySize / 2 + 14);
+    entry.bubble = this.createActivityBubble(fighter.pos.x, bubbleY, activity);
   }
 
   createActivityBubble(x, y, activity) {
