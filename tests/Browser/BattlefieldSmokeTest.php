@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Boss;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
 uses(RefreshDatabase::class);
@@ -18,5 +19,32 @@ test('battlefield page loads with no JS errors', function () {
     $page = visit('/battlefield');
 
     $page->assertSee('Boss #1')
+        ->assertNoJavaScriptErrors();
+});
+
+test('dispatching battlefield:hit updates the HP bar', function () {
+    $hasChrome = (bool) shell_exec('command -v chromium chromium-browser google-chrome chrome 2>/dev/null');
+    if (! $hasChrome) {
+        $this->markTestSkipped('No Chromium/Chrome installed.');
+    }
+
+    $boss = Boss::factory()->create(['number' => 1, 'max_hp' => 1_000, 'current_hp' => 1_000]);
+    $fighter = User::factory()->create(['last_event_at' => now()->subMinute()]);
+
+    $page = visit('/battlefield');
+
+    $page->script(<<<JS
+        window.dispatchEvent(new CustomEvent('battlefield:hit', {
+            detail: {
+                user_id: {$fighter->id},
+                damage: 250,
+                boss_hp_after: 750,
+                boss_max_hp: 1000,
+            },
+        }));
+    JS);
+
+    $page->wait(800)
+        ->assertSee('750 / 1,000')
         ->assertNoJavaScriptErrors();
 });

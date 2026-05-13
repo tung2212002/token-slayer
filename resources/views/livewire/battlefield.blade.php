@@ -2,20 +2,21 @@
     x-data="{
         hp: {{ $boss->current_hp }},
         max: {{ $boss->max_hp }},
-        damageEvents: [],
         isShaking: false,
         isFlashing: false,
     }"
     x-init="
+        const applyHit = (e) => {
+            hp = e.boss_hp_after;
+            isShaking = true;
+            setTimeout(() => isShaking = false, 200);
+        };
+
+        window.addEventListener('battlefield:hit', (ev) => applyHit(ev.detail));
+
         if (window.Echo) {
             window.Echo.channel('battlefield')
-                .listen('.HitDealt', e => {
-                    hp = e.boss_hp_after;
-                    damageEvents.unshift(e);
-                    damageEvents = damageEvents.slice(0, 10);
-                    isShaking = true;
-                    setTimeout(() => isShaking = false, 200);
-                })
+                .listen('.HitDealt', e => window.dispatchEvent(new CustomEvent('battlefield:hit', { detail: e })))
                 .listen('.BossSpawned', e => { hp = e.max_hp; max = e.max_hp; })
                 .listen('.BossKilled', () => {
                     isFlashing = true;
