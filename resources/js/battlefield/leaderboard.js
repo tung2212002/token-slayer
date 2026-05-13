@@ -1,24 +1,39 @@
+import { bus } from './bus.js';
+
 const TOP_ROWS = 5;
 const ROW_TOP_Y = 10;
 const ROW_HEIGHT = 14;
 
 export function createLeaderboard(scene) {
   const damageByFighter = new Map();
-  const rowX = scene.layout.logicalWidth - 8;
-  const rows = Array.from({ length: TOP_ROWS }, (_, i) => {
-    return scene.addSharpText(rowX, ROW_TOP_Y + i * ROW_HEIGHT, '', {
-      fontFamily: 'monospace',
-      fontSize: '10px',
-      color: '#e2e8f0',
-      stroke: '#0f172a',
-      strokeThickness: 3,
-    }, 3).setOrigin(1, 0);
-  });
+  const isPortrait = scene.mode === 'portrait';
+
+  const rows = isPortrait
+    ? []
+    : Array.from({ length: TOP_ROWS }, (_, i) => {
+      return scene.addSharpText(scene.layout.logicalWidth - 8, ROW_TOP_Y + i * ROW_HEIGHT, '', {
+        fontFamily: 'monospace',
+        fontSize: '10px',
+        color: '#e2e8f0',
+        stroke: '#0f172a',
+        strokeThickness: 3,
+      }, 3).setOrigin(1, 0);
+    });
 
   function render() {
     const ranked = [...damageByFighter.entries()]
       .sort((a, b) => b[1] - a[1])
       .slice(0, TOP_ROWS);
+
+    if (isPortrait) {
+      bus.emit('leaderboard-updated', ranked.map(([userId, damage]) => ({
+        userId,
+        handle: scene.fighters.get(userId)?.handleText || `#${userId}`,
+        damage,
+      })));
+      return;
+    }
+
     for (let i = 0; i < TOP_ROWS; i++) {
       if (ranked[i]) {
         const [userId, total] = ranked[i];
@@ -50,6 +65,19 @@ export function createLeaderboard(scene) {
 }
 
 export function showMvpCard(scene, { bossLabel, ranked, killerHandle }) {
+  if (scene.mode === 'portrait') {
+    bus.emit('show-mvp-overlay', {
+      bossLabel,
+      killerHandle,
+      ranked: ranked.map(([userId, damage]) => ({
+        userId,
+        handle: scene.fighters.get(userId)?.handleText || `#${userId}`,
+        damage,
+      })),
+    });
+    return;
+  }
+
   const cardX = scene.layout.logicalWidth / 2;
   const cardY = 120;
   const cardW = 280;
