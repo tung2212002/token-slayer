@@ -121,14 +121,23 @@ export class BattlefieldScene extends Phaser.Scene {
 
     this.leaderboard = createLeaderboard(this);
 
-    bus.on('hit', payload => this.handleHit(payload));
-    bus.on('boss-spawned', payload => this.handleBossSpawned(payload));
-    bus.on('boss-killed', payload => this.handleBossKilled(payload));
-
     this.charges = new Map();
-    bus.on('fighter-charging', payload => this.handleCharging(payload));
-    bus.on('fighter-idled', payload => this.handleIdled(payload));
-    bus.on('fighter-joined', payload => this.handleFighterJoined(payload));
+    this._busHandlers = {
+      'hit': payload => this.handleHit(payload),
+      'boss-spawned': payload => this.handleBossSpawned(payload),
+      'boss-killed': payload => this.handleBossKilled(payload),
+      'fighter-charging': payload => this.handleCharging(payload),
+      'fighter-idled': payload => this.handleIdled(payload),
+      'fighter-joined': payload => this.handleFighterJoined(payload),
+    };
+    for (const [evt, fn] of Object.entries(this._busHandlers)) {
+      bus.on(evt, fn);
+    }
+    this.events.once('shutdown', () => {
+      for (const [evt, fn] of Object.entries(this._busHandlers)) {
+        bus.off(evt, fn);
+      }
+    });
 
     this.events.emit('ready');
     this.game.events.emit('ready');
