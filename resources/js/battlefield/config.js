@@ -17,17 +17,6 @@ export const LAYOUTS = {
   },
 };
 
-// Back-compat aliases kept until scene.js and helpers migrate to LAYOUTS[mode].
-// Removed in Task 5.
-export const LOGICAL_WIDTH = LAYOUTS.landscape.logicalWidth;
-export const LOGICAL_HEIGHT = LAYOUTS.landscape.logicalHeight;
-export const BOSS_ANCHOR = LAYOUTS.landscape.boss.anchor;
-export const BOSS_SCALE = LAYOUTS.landscape.boss.scale;
-export const HP_BAR = LAYOUTS.landscape.hpBar;
-export const BOSS_NAME = LAYOUTS.landscape.boss.name;
-export const FIGHTER_ROW_Y = LAYOUTS.landscape.fighters.rowY;
-export const FIGHTER_ROW_X_RANGE = LAYOUTS.landscape.fighters.rowXRange;
-
 export const TIMINGS = {
   projectileArcMs: 320,
   flinchMs: 120,
