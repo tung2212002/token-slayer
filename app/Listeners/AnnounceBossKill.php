@@ -20,7 +20,7 @@ class AnnounceBossKill implements ShouldQueue
 
     public function handle(BossKilled $event): void
     {
-        $url = config('game.slack_kill_webhook_url');
+        $url = config('services.slack_notifier.webhook_url');
 
         if (! $url) {
             return;

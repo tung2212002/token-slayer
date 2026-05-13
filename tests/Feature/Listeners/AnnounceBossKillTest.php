@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Http;
 uses(RefreshDatabase::class);
 
 beforeEach(function () {
-    config(['game.slack_kill_webhook_url' => 'https://hooks.slack/test']);
+    config(['services.slack_notifier.webhook_url' => 'https://hooks.slack/test']);
     Http::fake();
 });
 
@@ -46,7 +46,7 @@ test('boss kill posts Block Kit payload with killer and new boss', function () {
 });
 
 test('listener is a no-op when webhook URL is not configured', function () {
-    config(['game.slack_kill_webhook_url' => null]);
+    config(['services.slack_notifier.webhook_url' => null]);
 
     $killer = User::factory()->create(['slack_handle' => 'bob']);
     $killed = Boss::factory()->defeated()->create([
