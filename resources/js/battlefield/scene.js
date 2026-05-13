@@ -25,6 +25,14 @@ export class BattlefieldScene extends Phaser.Scene {
       frameWidth: 32,
       frameHeight: 32,
     });
+    this.load.spritesheet('boss-skeleton', '/assets/battlefield/bosses/skeleton.png', {
+      frameWidth: 32,
+      frameHeight: 32,
+    });
+    this.load.spritesheet('boss-slime', '/assets/battlefield/bosses/slime.png', {
+      frameWidth: 32,
+      frameHeight: 32,
+    });
     this.load.spritesheet('fireball', '/assets/battlefield/fx/fireball.png', {
       frameWidth: 16,
       frameHeight: 16,
@@ -35,6 +43,24 @@ export class BattlefieldScene extends Phaser.Scene {
     });
   }
 
+  bossTextureFor(number) {
+    const keys = ['boss-ghost', 'boss-skeleton', 'boss-slime'];
+    return keys[number % keys.length];
+  }
+
+  ensureBossIdleAnim(textureKey) {
+    const animKey = `${textureKey}-idle`;
+    if (!this.anims.exists(animKey)) {
+      this.anims.create({
+        key: animKey,
+        frames: this.anims.generateFrameNumbers(textureKey, { start: 0, end: 3 }),
+        frameRate: 6,
+        repeat: -1,
+      });
+    }
+    return animKey;
+  }
+
   create() {
     this.add.rectangle(LOGICAL_WIDTH / 2, LOGICAL_HEIGHT / 2, LOGICAL_WIDTH, LOGICAL_HEIGHT, BG_COLOR);
 
@@ -43,17 +69,12 @@ export class BattlefieldScene extends Phaser.Scene {
     const state = this.game.registry.get('initialState');
     this.bossState = { ...state.boss };
 
-    this.anims.create({
-      key: 'boss-idle',
-      frames: this.anims.generateFrameNumbers('boss-ghost', { start: 0, end: 3 }),
-      frameRate: 6,
-      repeat: -1,
-    });
-
+    const initialKey = this.bossTextureFor(state.boss.number);
+    const initialAnim = this.ensureBossIdleAnim(initialKey);
     this.bossSprite = this.add
-      .sprite(BOSS_ANCHOR.x, BOSS_ANCHOR.y, 'boss-ghost')
+      .sprite(BOSS_ANCHOR.x, BOSS_ANCHOR.y, initialKey)
       .setScale(3)
-      .play('boss-idle');
+      .play(initialAnim);
 
     this.bossNameText = this.add
       .text(BOSS_NAME.x, BOSS_NAME.y, `BOSS #${state.boss.number}`, {
@@ -96,6 +117,7 @@ export class BattlefieldScene extends Phaser.Scene {
     state.fighters.forEach((f, i) => this.addFighter(f, positions[i]));
 
     bus.on('hit', payload => this.handleHit(payload));
+    bus.on('boss-spawned', payload => this.handleBossSpawned(payload));
 
     this.charges = new Map();
     bus.on('fighter-charging', payload => this.handleCharging(payload));
@@ -122,6 +144,38 @@ export class BattlefieldScene extends Phaser.Scene {
     const fromX = fighter ? fighter.pos.x : LOGICAL_WIDTH / 2;
     const fromY = fighter ? fighter.pos.y : LOGICAL_HEIGHT / 2;
     spawnProjectile(this, fromX, fromY, () => applyImpact(this, payload.boss_hp_after));
+  }
+
+  handleBossSpawned(payload) {
+    const oldSprite = this.bossSprite;
+    this.tweens.add({
+      targets: oldSprite,
+      alpha: 0,
+      duration: 200,
+      onComplete: () => oldSprite.destroy(),
+    });
+
+    const textureKey = this.bossTextureFor(payload.number);
+    const animKey = this.ensureBossIdleAnim(textureKey);
+    this.bossSprite = this.add
+      .sprite(BOSS_ANCHOR.x, -40, textureKey)
+      .setScale(3)
+      .play(animKey);
+    this.tweens.add({
+      targets: this.bossSprite,
+      y: BOSS_ANCHOR.y,
+      duration: TIMINGS.bossSpawnMs,
+      ease: 'Bounce.easeOut',
+    });
+
+    this.bossState = {
+      currentHp: payload.max_hp,
+      maxHp: payload.max_hp,
+      number: payload.number,
+    };
+    this.bossNameText.setText(`BOSS #${payload.number}`);
+    this.hpBarFill.width = HP_BAR.width;
+    this.hpText.setText(`${payload.max_hp} / ${payload.max_hp}`);
   }
 
   handleCharging(payload) {
