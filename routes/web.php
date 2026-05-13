@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Auth\SlackController;
+use App\Http\Controllers\AvatarProxyController;
 use App\Http\Controllers\HistoryController;
 use Illuminate\Support\Facades\Route;
 
@@ -14,5 +15,7 @@ Route::get('/auth/slack/callback', [SlackController::class, 'callback']);
 Route::get('/profile', fn () => view('profile'))->middleware('auth')->name('profile');
 
 Route::get('/battlefield', fn () => view('battlefield'))->name('battlefield');
+
+Route::get('/avatars/{user}', AvatarProxyController::class)->name('avatar');
 
 Route::get('/history', [HistoryController::class, 'index'])->name('history');

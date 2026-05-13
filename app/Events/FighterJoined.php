@@ -36,7 +36,7 @@ class FighterJoined implements ShouldBroadcastNow
             'user_id' => $this->user->id,
             'slack_handle' => $this->user->slack_handle,
             'display_name' => $this->user->display_name,
-            'avatar_url' => $this->user->avatar_url,
+            'avatar_url' => route('avatar', $this->user),
         ];
     }
 }

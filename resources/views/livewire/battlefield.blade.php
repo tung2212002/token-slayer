@@ -10,7 +10,7 @@
             'fighters' => $fighters->map(fn ($f) => [
                 'id' => $f->id,
                 'handle' => $f->slack_handle,
-                'avatarUrl' => $f->avatar_url,
+                'avatarUrl' => route('avatar', $f),
             ])->values(),
         ]) }}"
         class="absolute inset-0"
