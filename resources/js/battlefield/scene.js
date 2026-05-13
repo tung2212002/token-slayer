@@ -77,14 +77,11 @@ export class BattlefieldScene extends Phaser.Scene {
       .setScale(BOSS_SCALE)
       .play(initialAnim);
 
-    this.bossNameText = this.add
-      .text(BOSS_NAME.x, BOSS_NAME.y, `BOSS #${state.boss.number}`, {
-        fontFamily: 'monospace',
-        fontSize: '14px',
-        color: '#ffffff',
-      })
-      .setOrigin(0.5)
-      .setResolution(2);
+    this.bossNameText = this.addSharpText(BOSS_NAME.x, BOSS_NAME.y, `BOSS #${state.boss.number}`, {
+      fontFamily: 'monospace',
+      fontSize: '14px',
+      color: '#ffffff',
+    });
 
     this.hpBarBg = this.add
       .rectangle(HP_BAR.x, HP_BAR.y, HP_BAR.width, HP_BAR.height, 0x334155)
@@ -100,23 +97,13 @@ export class BattlefieldScene extends Phaser.Scene {
       )
       .setOrigin(0, 0.5);
 
-    this.hpText = this.add
-      .text(HP_BAR.x, HP_BAR.y + 12, `${state.boss.currentHp} / ${state.boss.maxHp}`, {
-        fontFamily: 'monospace',
-        fontSize: '11px',
-        color: '#ffffff',
-        stroke: '#0f172a',
-        strokeThickness: 3,
-      })
-      .setOrigin(0.5)
-      .setResolution(3);
-    this.hpText.texture.setFilter(Phaser.Textures.FilterMode.LINEAR);
-    const originalSetText = this.hpText.setText.bind(this.hpText);
-    this.hpText.setText = (...args) => {
-      const result = originalSetText(...args);
-      this.hpText.texture.setFilter(Phaser.Textures.FilterMode.LINEAR);
-      return result;
-    };
+    this.hpText = this.addSharpText(HP_BAR.x, HP_BAR.y + 12, `${state.boss.currentHp} / ${state.boss.maxHp}`, {
+      fontFamily: 'monospace',
+      fontSize: '11px',
+      color: '#ffffff',
+      stroke: '#0f172a',
+      strokeThickness: 3,
+    }, 3);
 
     this.fighters = new Map();
     const positions = computeFighterPositions(
@@ -137,6 +124,18 @@ export class BattlefieldScene extends Phaser.Scene {
 
     this.events.emit('ready');
     this.game.events.emit('ready');
+  }
+
+  addSharpText(x, y, content, style, resolution = 2) {
+    const text = this.add.text(x, y, content, style).setOrigin(0.5).setResolution(resolution);
+    text.texture.setFilter(Phaser.Textures.FilterMode.LINEAR);
+    const originalSetText = text.setText.bind(text);
+    text.setText = (...args) => {
+      const result = originalSetText(...args);
+      text.texture.setFilter(Phaser.Textures.FilterMode.LINEAR);
+      return result;
+    };
+    return text;
   }
 
   makeChargeRingTexture() {
@@ -330,14 +329,11 @@ export class BattlefieldScene extends Phaser.Scene {
     const maskShape = this.make.graphics({ x: pos.x, y: pos.y, add: false });
     maskShape.fillCircle(0, 0, 12);
     sprite.setMask(maskShape.createGeometryMask());
-    const handle = this.add
-      .text(pos.x, pos.y + 16, fighter.handle, {
-        fontFamily: 'monospace',
-        fontSize: '8px',
-        color: '#fbbf24',
-      })
-      .setOrigin(0.5)
-      .setResolution(2);
+    const handle = this.addSharpText(pos.x, pos.y + 16, fighter.handle ?? '', {
+      fontFamily: 'monospace',
+      fontSize: '8px',
+      color: '#fbbf24',
+    });
     this.fighters.set(fighter.id, { sprite, handle, pos, maskShape });
   }
 }
