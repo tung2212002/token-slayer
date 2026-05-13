@@ -104,3 +104,29 @@ test('HP bar holds until projectile impact', function () {
         ->assertSee('750 / 1,000')
         ->assertNoJavaScriptErrors();
 });
+
+test('hit from a user without a visible avatar still applies damage', function () {
+    $hasChrome = (bool) shell_exec('command -v chromium chromium-browser google-chrome chrome 2>/dev/null');
+    if (! $hasChrome) {
+        $this->markTestSkipped('No Chromium/Chrome installed.');
+    }
+
+    Boss::factory()->create(['number' => 1, 'max_hp' => 1_000, 'current_hp' => 1_000]);
+
+    $page = visit('/battlefield');
+
+    $page->script(<<<'JS'
+        window.dispatchEvent(new CustomEvent('battlefield:hit', {
+            detail: {
+                user_id: 99999, // not in DOM
+                damage: 400,
+                boss_hp_after: 600,
+                boss_max_hp: 1000,
+            },
+        }));
+    JS);
+
+    $page->wait(100)
+        ->assertSee('600 / 1,000')
+        ->assertNoJavaScriptErrors();
+});
