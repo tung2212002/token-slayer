@@ -12,6 +12,7 @@ import {
 import { computeFighterPositions } from './layout.js';
 import { bus } from './bus.js';
 import { spawnProjectile } from './projectile.js';
+import { applyImpact } from './impact.js';
 
 export class BattlefieldScene extends Phaser.Scene {
   constructor() {
@@ -26,6 +27,10 @@ export class BattlefieldScene extends Phaser.Scene {
     this.load.spritesheet('fireball', '/assets/battlefield/fx/fireball.png', {
       frameWidth: 16,
       frameHeight: 16,
+    });
+    this.load.spritesheet('explosion', '/assets/battlefield/fx/explosion.png', {
+      frameWidth: 32,
+      frameHeight: 32,
     });
   }
 
@@ -97,9 +102,7 @@ export class BattlefieldScene extends Phaser.Scene {
     const fighter = this.fighters.get(payload.user_id);
     const fromX = fighter ? fighter.pos.x : LOGICAL_WIDTH / 2;
     const fromY = fighter ? fighter.pos.y : LOGICAL_HEIGHT / 2;
-    spawnProjectile(this, fromX, fromY, () => {
-      this.bossState.currentHp = payload.boss_hp_after;
-    });
+    spawnProjectile(this, fromX, fromY, () => applyImpact(this, payload.boss_hp_after));
   }
 
   async loadAvatarTexture(fighter) {
