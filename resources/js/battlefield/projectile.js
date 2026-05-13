@@ -1,5 +1,4 @@
-import Phaser from 'phaser';
-import { BOSS_ANCHOR, TIMINGS } from './config.js';
+import { TIMINGS } from './config.js';
 
 export function spawnProjectile(scene, fromX, fromY, onImpact) {
   const sprite = scene.add.sprite(fromX, fromY, 'fireball').setScale(2);
@@ -15,8 +14,8 @@ export function spawnProjectile(scene, fromX, fromY, onImpact) {
   sprite.play('fireball-loop');
 
   const lift = 30;
-  const toX = BOSS_ANCHOR.x;
-  const toY = BOSS_ANCHOR.y;
+  const toX = scene.layout.boss.anchor.x;
+  const toY = scene.layout.boss.anchor.y;
 
   scene.tweens.add({
     targets: sprite,

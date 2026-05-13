@@ -1,17 +1,11 @@
 import Phaser from 'phaser';
-import {
-  BG_COLOR,
-  LOGICAL_WIDTH,
-  LOGICAL_HEIGHT,
-  BOSS_ANCHOR,
-  BOSS_SCALE,
-  HP_BAR,
-  BOSS_NAME,
-  FIGHTER_ROW_X_RANGE,
-  FIGHTER_ROW_Y,
-  TIMINGS,
-} from './config.js';
+import { BG_COLOR, LAYOUTS, TIMINGS } from './config.js';
 import { computeFighterPositions, fighterDisplayConfig } from './layout.js';
+import { bus } from './bus.js';
+import { spawnProjectile } from './projectile.js';
+import { applyImpact } from './impact.js';
+import { createLeaderboard, showMvpCard } from './leaderboard.js';
+import { formatHp } from './format.js';
 
 const ACTIVITY_MAX_CHARS = 18;
 function truncateActivity(activity) {
@@ -20,11 +14,6 @@ function truncateActivity(activity) {
   }
   return activity.slice(0, ACTIVITY_MAX_CHARS - 1) + '…';
 }
-import { bus } from './bus.js';
-import { spawnProjectile } from './projectile.js';
-import { applyImpact } from './impact.js';
-import { createLeaderboard, showMvpCard } from './leaderboard.js';
-import { formatHp } from './format.js';
 
 export class BattlefieldScene extends Phaser.Scene {
   constructor() {
@@ -73,7 +62,11 @@ export class BattlefieldScene extends Phaser.Scene {
   }
 
   create() {
-    this.add.rectangle(LOGICAL_WIDTH / 2, LOGICAL_HEIGHT / 2, LOGICAL_WIDTH, LOGICAL_HEIGHT, BG_COLOR);
+    this.mode = this.game.registry.get('mode') ?? 'landscape';
+    this.layout = LAYOUTS[this.mode];
+    const L = this.layout;
+
+    this.add.rectangle(L.logicalWidth / 2, L.logicalHeight / 2, L.logicalWidth, L.logicalHeight, BG_COLOR);
 
     this.makeChargeRingTexture();
 
@@ -83,31 +76,31 @@ export class BattlefieldScene extends Phaser.Scene {
     const initialKey = this.bossTextureFor(state.boss.number);
     const initialAnim = this.ensureBossIdleAnim(initialKey);
     this.bossSprite = this.add
-      .sprite(BOSS_ANCHOR.x, BOSS_ANCHOR.y, initialKey)
-      .setScale(BOSS_SCALE)
+      .sprite(L.boss.anchor.x, L.boss.anchor.y, initialKey)
+      .setScale(L.boss.scale)
       .play(initialAnim);
 
-    this.bossNameText = this.addSharpText(BOSS_NAME.x, BOSS_NAME.y, this.bossLabel(state.boss), {
+    this.bossNameText = this.addSharpText(L.boss.name.x, L.boss.name.y, this.bossLabel(state.boss), {
       fontFamily: 'monospace',
       fontSize: '14px',
       color: '#ffffff',
     });
 
     this.hpBarBg = this.add
-      .rectangle(HP_BAR.x, HP_BAR.y, HP_BAR.width, HP_BAR.height, 0x334155)
+      .rectangle(L.hpBar.x, L.hpBar.y, L.hpBar.width, L.hpBar.height, 0x334155)
       .setOrigin(0.5);
 
     this.hpBarFill = this.add
       .rectangle(
-        HP_BAR.x - HP_BAR.width / 2,
-        HP_BAR.y,
-        Math.round(HP_BAR.width * (state.boss.currentHp / state.boss.maxHp)),
-        HP_BAR.height,
+        L.hpBar.x - L.hpBar.width / 2,
+        L.hpBar.y,
+        Math.round(L.hpBar.width * (state.boss.currentHp / state.boss.maxHp)),
+        L.hpBar.height,
         0xef4444
       )
       .setOrigin(0, 0.5);
 
-    this.hpText = this.addSharpText(HP_BAR.x, HP_BAR.y + 12, `${formatHp(state.boss.currentHp)} / ${formatHp(state.boss.maxHp)}`, {
+    this.hpText = this.addSharpText(L.hpBar.x, L.hpBar.y + 12, `${formatHp(state.boss.currentHp)} / ${formatHp(state.boss.maxHp)}`, {
       fontFamily: 'monospace',
       fontSize: '11px',
       color: '#ffffff',
@@ -116,10 +109,10 @@ export class BattlefieldScene extends Phaser.Scene {
     }, 3);
 
     this.fighters = new Map();
-    const config = fighterDisplayConfig(state.fighters.length);
+    const config = fighterDisplayConfig(state.fighters.length, this.mode);
     const positions = computeFighterPositions(
       state.fighters.length,
-      FIGHTER_ROW_X_RANGE,
+      L.fighters.rowXRange,
       config.bottomY,
       config.perRow,
       config.rowSpacing,
@@ -175,8 +168,8 @@ export class BattlefieldScene extends Phaser.Scene {
   handleHit(payload) {
     this.clearCharge(payload.user_id);
     const fighter = this.fighters.get(payload.user_id);
-    const fromX = fighter ? fighter.pos.x : LOGICAL_WIDTH / 2;
-    const fromY = fighter ? fighter.pos.y : LOGICAL_HEIGHT / 2;
+    const fromX = fighter ? fighter.pos.x : this.layout.logicalWidth / 2;
+    const fromY = fighter ? fighter.pos.y : this.layout.logicalHeight / 2;
     spawnProjectile(this, fromX, fromY, () => {
       const damage = Math.max(0, this.bossState.currentHp - payload.boss_hp_after);
       this.leaderboard?.onHit(payload.user_id, damage);
@@ -185,6 +178,7 @@ export class BattlefieldScene extends Phaser.Scene {
   }
 
   handleBossSpawned(payload) {
+    const L = this.layout;
     const oldSprite = this.bossSprite;
     this.tweens.add({
       targets: oldSprite,
@@ -196,12 +190,12 @@ export class BattlefieldScene extends Phaser.Scene {
     const textureKey = this.bossTextureFor(payload.boss_number);
     const animKey = this.ensureBossIdleAnim(textureKey);
     this.bossSprite = this.add
-      .sprite(BOSS_ANCHOR.x, -40, textureKey)
-      .setScale(BOSS_SCALE)
+      .sprite(L.boss.anchor.x, -40, textureKey)
+      .setScale(L.boss.scale)
       .play(animKey);
     this.tweens.add({
       targets: this.bossSprite,
-      y: BOSS_ANCHOR.y,
+      y: L.boss.anchor.y,
       duration: TIMINGS.bossSpawnMs,
       ease: 'Bounce.easeOut',
     });
@@ -213,7 +207,7 @@ export class BattlefieldScene extends Phaser.Scene {
       name: payload.boss_name,
     };
     this.bossNameText.setText(this.bossLabel(this.bossState));
-    this.hpBarFill.width = HP_BAR.width;
+    this.hpBarFill.width = L.hpBar.width;
     this.hpText.setText(`${formatHp(payload.max_hp)} / ${formatHp(payload.max_hp)}`);
     this.leaderboard?.reset();
   }
@@ -282,7 +276,7 @@ export class BattlefieldScene extends Phaser.Scene {
   }
 
   fightersAllowBubbles() {
-    return fighterDisplayConfig(this.fighters.size).showHandle;
+    return fighterDisplayConfig(this.fighters.size, this.mode).showHandle;
   }
 
   updateActivityBubble(entry, fighter, activity) {
@@ -378,18 +372,16 @@ export class BattlefieldScene extends Phaser.Scene {
       avatarUrl: payload.avatar_url,
     };
 
-    // Recompute positions for the new count.
     const count = this.fighters.size + 1;
-    const config = fighterDisplayConfig(count);
+    const config = fighterDisplayConfig(count, this.mode);
     const positions = computeFighterPositions(
       count,
-      FIGHTER_ROW_X_RANGE,
+      this.layout.fighters.rowXRange,
       config.bottomY,
       config.perRow,
       config.rowSpacing,
     );
 
-    // Tween existing fighters to their new slots.
     let i = 0;
     for (const entry of this.fighters.values()) {
       const target = positions[i++];
@@ -408,7 +400,7 @@ export class BattlefieldScene extends Phaser.Scene {
     await this.addFighter(fighter, newPos, config);
     const entry = this.fighters.get(fighter.id);
     if (!entry) {
-      return; // load failed; addFighter already warned
+      return;
     }
     const finalScale = entry.sprite.scaleX;
     entry.sprite.setScale(0);

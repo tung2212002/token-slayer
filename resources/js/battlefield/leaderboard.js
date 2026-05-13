@@ -1,14 +1,12 @@
-import { LOGICAL_WIDTH } from './config.js';
-
 const TOP_ROWS = 5;
-const ROW_X = LOGICAL_WIDTH - 8;
 const ROW_TOP_Y = 10;
 const ROW_HEIGHT = 14;
 
 export function createLeaderboard(scene) {
   const damageByFighter = new Map();
+  const rowX = scene.layout.logicalWidth - 8;
   const rows = Array.from({ length: TOP_ROWS }, (_, i) => {
-    return scene.addSharpText(ROW_X, ROW_TOP_Y + i * ROW_HEIGHT, '', {
+    return scene.addSharpText(rowX, ROW_TOP_Y + i * ROW_HEIGHT, '', {
       fontFamily: 'monospace',
       fontSize: '10px',
       color: '#e2e8f0',
@@ -52,7 +50,7 @@ export function createLeaderboard(scene) {
 }
 
 export function showMvpCard(scene, { bossLabel, ranked, killerHandle }) {
-  const cardX = LOGICAL_WIDTH / 2;
+  const cardX = scene.layout.logicalWidth / 2;
   const cardY = 120;
   const cardW = 280;
   const cardH = 80;

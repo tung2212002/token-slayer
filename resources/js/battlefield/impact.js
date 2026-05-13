@@ -1,7 +1,10 @@
-import { BOSS_ANCHOR, TIMINGS, HP_BAR } from './config.js';
+import { TIMINGS } from './config.js';
 import { formatHp } from './format.js';
 
 export function applyImpact(scene, hpAfter) {
+  const bossAnchor = scene.layout.boss.anchor;
+  const hpBar = scene.layout.hpBar;
+
   if (!scene.anims.exists('explosion-once')) {
     scene.anims.create({
       key: 'explosion-once',
@@ -10,7 +13,7 @@ export function applyImpact(scene, hpAfter) {
     });
   }
   const burst = scene.add
-    .sprite(BOSS_ANCHOR.x, BOSS_ANCHOR.y, 'explosion')
+    .sprite(bossAnchor.x, bossAnchor.y, 'explosion')
     .setScale(2);
   burst.play('explosion-once').once('animationcomplete', () => burst.destroy());
 
@@ -46,7 +49,7 @@ export function applyImpact(scene, hpAfter) {
     duration: TIMINGS.hpBarMs,
     ease: 'Quad.easeOut',
     onUpdate: () => {
-      scene.hpBarFill.width = Math.round(HP_BAR.width * (counter.v / max));
+      scene.hpBarFill.width = Math.round(hpBar.width * (counter.v / max));
       scene.hpText.setText(`${formatHp(counter.v)} / ${formatHp(max)}`);
     },
   });
@@ -54,9 +57,10 @@ export function applyImpact(scene, hpAfter) {
 }
 
 function spawnDamagePopup(scene, damage) {
+  const bossAnchor = scene.layout.boss.anchor;
   const jitter = (Math.random() - 0.5) * 30;
-  const startX = BOSS_ANCHOR.x + jitter;
-  const startY = BOSS_ANCHOR.y - 20;
+  const startX = bossAnchor.x + jitter;
+  const startY = bossAnchor.y - 20;
   const popup = scene.addSharpText(startX, startY, `-${damage.toLocaleString()}`, {
     fontFamily: 'monospace',
     fontSize: '10px',
