@@ -6,6 +6,10 @@ use App\Http\Controllers\HistoryController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
+    if (auth()->check()) {
+        return redirect()->route('battlefield');
+    }
+
     return view('welcome');
 });
 
