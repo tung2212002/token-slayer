@@ -18,6 +18,8 @@ return Application::configure(basePath: dirname(__DIR__))
             'hook.token' => AuthenticateHookToken::class,
         ]);
 
+        $middleware->redirectGuestsTo(fn () => route('slack.login'));
+
         $middleware->trustProxies(at: '*');
     })
     ->withExceptions(function (Exceptions $exceptions): void {

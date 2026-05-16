@@ -9,6 +9,10 @@ uses(RefreshDatabase::class);
 
 beforeEach(fn () => config(['app.hook_namespace' => 'aiorg']));
 
+test('profile redirects guests to the slack login route', function () {
+    $this->get('/profile')->assertRedirect(route('slack.login'));
+});
+
 test('profile shows a link to the battlefield page', function () {
     $user = User::factory()->create();
     $this->actingAs($user);
