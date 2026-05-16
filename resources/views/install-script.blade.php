@@ -1,8 +1,11 @@
 {!! '#!/bin/sh' !!}
 # aiorg hook installer
 # Installs Claude Code + Codex CLI hooks that POST to {{ $baseUrl }}.
-# Token is read at runtime from ~/.config/aiorg/token (set separately
-# from the profile page after regenerating).
+# Hooks read the token at runtime from ~/.config/aiorg/token.
+#
+# Pass AIORG_TOKEN=<token> in the environment to save the token in the
+# same run, e.g. `curl -fsSL ... | AIORG_TOKEN=xxx sh`. Otherwise the
+# token must be written separately.
 #
 # Re-running this script is safe — existing aiorg hook blocks are
 # replaced, other settings in your config files are preserved.
@@ -18,8 +21,17 @@ if [ -z "$PY" ]; then
     exit 1
 fi
 
-# Ensure token directory exists (token itself is written separately).
+# Ensure token directory exists.
 mkdir -p "$HOME/.config/aiorg"
+
+# If AIORG_TOKEN was passed, save it now so a single command does both
+# hook setup and token install.
+if [ -n "${AIORG_TOKEN:-}" ]; then
+    TOKEN_FILE="$HOME/.config/aiorg/token"
+    printf '%s' "$AIORG_TOKEN" > "$TOKEN_FILE"
+    chmod 600 "$TOKEN_FILE"
+    echo "saved token -> $TOKEN_FILE"
+fi
 
 # --- Claude Code: merge into ~/.claude/settings.json ---
 mkdir -p "$HOME/.claude"
@@ -86,5 +98,8 @@ command = "$CODEX_CMD"
 EOF
 
 echo "installed Codex CLI hooks -> $CODEX_CONFIG"
-echo ""
-echo "Next: save your token from the profile page into ~/.config/aiorg/token."
+
+if [ -z "${AIORG_TOKEN:-}" ] && [ ! -s "$HOME/.config/aiorg/token" ]; then
+    echo ""
+    echo "Next: save your token from the profile page into ~/.config/aiorg/token."
+fi

@@ -31,10 +31,13 @@ class Profile extends Component
             'codexSnippet' => view('partials.codex-snippet', [
                 'baseUrl' => url('/api/events').'?provider=codex',
             ])->render(),
-            'installCommand' => $this->plainToken
+            'installUrl' => route('install-script'),
+            'combinedCommand' => $this->plainToken
+                ? 'curl -fsSL '.route('install-script')." | AIORG_TOKEN={$this->plainToken} sh"
+                : null,
+            'tokenSaveCommand' => $this->plainToken
                 ? "mkdir -p ~/.config/aiorg && printf '%s' '{$this->plainToken}' > ~/.config/aiorg/token && chmod 600 ~/.config/aiorg/token"
                 : null,
-            'installUrl' => route('install-script'),
         ]);
     }
 }

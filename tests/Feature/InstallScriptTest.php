@@ -34,3 +34,12 @@ test('install.sh writes to claude settings and codex config and uses idempotent 
         ->toContain('# >>> aiorg hooks')
         ->toContain('# <<< aiorg hooks');
 });
+
+test('install.sh saves AIORG_TOKEN to the token file when present', function () {
+    $script = $this->get('/install')->getContent();
+
+    expect($script)
+        ->toContain('${AIORG_TOKEN:-}')
+        ->toContain('printf \'%s\' "$AIORG_TOKEN"')
+        ->toContain('chmod 600 "$TOKEN_FILE"');
+});
