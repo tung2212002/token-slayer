@@ -26,13 +26,15 @@ class Profile extends Component
         return view('livewire.profile', [
             'user' => auth()->user(),
             'claudeSnippet' => view('partials.claude-snippet', [
-                'token' => $this->plainToken ?? 'YOUR_TOKEN',
                 'baseUrl' => url('/api/events'),
             ])->render(),
             'codexSnippet' => view('partials.codex-snippet', [
-                'token' => $this->plainToken ?? 'YOUR_TOKEN',
                 'baseUrl' => url('/api/events').'?provider=codex',
             ])->render(),
+            'installCommand' => $this->plainToken
+                ? "mkdir -p ~/.config/aiorg && printf '%s' '{$this->plainToken}' > ~/.config/aiorg/token && chmod 600 ~/.config/aiorg/token"
+                : null,
+            'installUrl' => route('install-script'),
         ]);
     }
 }
