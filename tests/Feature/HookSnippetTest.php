@@ -1,6 +1,6 @@
 <?php
 
-test('claude snippet reads token from file and includes all event hooks', function () {
+test('claude snippet calls the install-script helper and lists every claude code event', function () {
     $rendered = view('partials.claude-snippet', [
         'baseUrl' => 'https://app/api/events',
         'namespace' => 'aiorg',
@@ -9,56 +9,30 @@ test('claude snippet reads token from file and includes all event hooks', functi
     foreach (['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'Stop', 'SubagentStop', 'SessionEnd', 'Notification'] as $hook) {
         expect($rendered)->toContain($hook);
     }
-    expect($rendered)
-        ->toContain("Bearer '\$(cat ~/.config/aiorg/token)")
-        ->toContain('https://app/api/events');
 
+    expect($rendered)->toContain('bash $HOME/.config/aiorg/send-hook.sh');
     expect(json_decode($rendered, true))->toBeArray();
 });
 
-test('claude snippet suppresses curl errors so unreachable endpoints stay silent', function () {
-    $rendered = view('partials.claude-snippet', [
-        'baseUrl' => 'https://app/api/events',
-        'namespace' => 'aiorg',
-    ])->render();
-
-    expect($rendered)
-        ->toContain('curl -s ')
-        ->not->toContain('curl -sS')
-        ->toContain('>/dev/null 2>&1');
-});
-
-test('claude snippet uses the namespace in the token path', function () {
+test('claude snippet uses the namespace in the helper path', function () {
     $rendered = view('partials.claude-snippet', [
         'baseUrl' => 'https://app/api/events',
         'namespace' => 'acme',
     ])->render();
 
     expect($rendered)
-        ->toContain('~/.config/acme/token')
-        ->not->toContain('~/.config/aiorg/token');
+        ->toContain('$HOME/.config/acme/send-hook.sh')
+        ->not->toContain('$HOME/.config/aiorg/send-hook.sh');
 });
 
-test('codex snippet reads token from file and includes a curl command', function () {
+test('codex snippet calls the helper with PROVIDER=codex', function () {
     $rendered = view('partials.codex-snippet', [
-        'baseUrl' => 'https://app/api/events?provider=codex',
+        'baseUrl' => 'https://app/api/events',
         'namespace' => 'aiorg',
     ])->render();
 
     expect($rendered)
-        ->toContain("Bearer '\$(cat ~/.config/aiorg/token)")
-        ->toContain('https://app/api/events?provider=codex')
-        ->toContain('curl');
-});
-
-test('codex snippet suppresses curl errors so unreachable endpoints stay silent', function () {
-    $rendered = view('partials.codex-snippet', [
-        'baseUrl' => 'https://app/api/events?provider=codex',
-        'namespace' => 'aiorg',
-    ])->render();
-
-    expect($rendered)
-        ->toContain('curl -s ')
-        ->not->toContain('curl -sS')
-        ->toContain('>/dev/null 2>&1');
+        ->toContain('PROVIDER=codex bash $HOME/.config/aiorg/send-hook.sh')
+        ->toContain('session_start')
+        ->toContain('stop');
 });

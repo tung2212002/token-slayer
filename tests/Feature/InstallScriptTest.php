@@ -15,8 +15,21 @@ test('install.sh embeds the events URL and points the hook command at the local 
     expect($script)
         ->toContain('#!/bin/sh')
         ->toContain(url('/api/events'))
-        ->toContain('~/.config/aiorg/token')
-        ->toContain('Bearer \'\\$(cat ~/.config/aiorg/token)');
+        ->toContain('TOKEN_FILE="$HOME/.config/aiorg/token"')
+        ->toContain('Bearer $(cat "$TOKEN_FILE")');
+});
+
+test('install.sh drops a hook helper script that enriches Stop events with transcript tokens', function () {
+    $script = $this->get('/install')->getContent();
+
+    expect($script)
+        ->toContain('HELPER="$HOME/.config/aiorg/send-hook.sh"')
+        ->toContain("cat > \"\$HELPER\" <<'HOOK_SH'")
+        ->toContain('chmod +x "$HELPER"')
+        ->toContain('transcript_path')
+        ->toContain('output_tokens')
+        ->toContain('CLAUDE_CMD="bash $HELPER"')
+        ->toContain('CODEX_CMD="PROVIDER=codex bash $HELPER"');
 });
 
 test('install.sh covers every claude code hook event', function () {

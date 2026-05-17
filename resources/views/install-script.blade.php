@@ -17,9 +17,6 @@
 
 set -e
 
-CLAUDE_CMD="BODY=\$(cat); curl -s --max-time 3 -X POST '{{ $baseUrl }}' -H 'Authorization: Bearer '\$(cat ~/.config/{{ $namespace }}/token) -H 'Content-Type: application/json' -d \"\$BODY\" >/dev/null 2>&1 &"
-CODEX_CMD="BODY=\$(cat); curl -s --max-time 3 -X POST '{{ $baseUrl }}?provider=codex' -H 'Authorization: Bearer '\$(cat ~/.config/{{ $namespace }}/token) -H 'Content-Type: application/json' -d \"\$BODY\" >/dev/null 2>&1 &"
-
 PY=$(command -v python3 || command -v python || true)
 if [ -z "$PY" ]; then
     echo "error: python3 (or python) is required to merge ~/.claude/settings.json" >&2
@@ -28,6 +25,59 @@ fi
 
 # Ensure token directory exists.
 mkdir -p "$HOME/.config/{{ $namespace }}"
+
+# Drop the hook helper script. Stop events are enriched with a tokens count
+# parsed from the local Claude transcript (requires jq when available),
+# because the server cannot read the user's filesystem.
+HELPER="$HOME/.config/{{ $namespace }}/send-hook.sh"
+cat > "$HELPER" <<'HOOK_SH'
+#!/usr/bin/env bash
+set -u
+
+API_URL='{{ $baseUrl }}'
+TOKEN_FILE="$HOME/.config/{{ $namespace }}/token"
+
+BODY=$(cat)
+[ -r "$TOKEN_FILE" ] || exit 0
+
+if command -v jq >/dev/null 2>&1; then
+  TRANSCRIPT=$(printf '%s' "$BODY" | jq -r '.transcript_path // ""' 2>/dev/null)
+  if [ -n "$TRANSCRIPT" ] && [ -r "$TRANSCRIPT" ]; then
+    TOKENS=$(jq -sr '
+      . as $a
+      | (length - 1) as $end
+      | reduce range($end; -1; -1) as $i ({t:0, stop:false};
+          if .stop then . else
+            ($a[$i]) as $e
+            | if $e.type == "assistant" then
+                .t += ($e.message.usage.output_tokens // 0)
+              elif $e.type == "user"
+                   and ((try $e.message.content[0].type catch null) != "tool_result") then
+                .stop = true
+              else . end
+          end)
+      | .t
+    ' "$TRANSCRIPT" 2>/dev/null)
+    if [ -n "${TOKENS:-}" ]; then
+      BODY=$(printf '%s' "$BODY" | jq -c --argjson t "$TOKENS" '. + {tokens:$t}' 2>/dev/null || printf '%s' "$BODY")
+    fi
+  fi
+fi
+
+URL="$API_URL"
+if [ "${PROVIDER:-}" = "codex" ]; then
+  URL="${URL}?provider=codex"
+fi
+
+curl -s --max-time 3 -X POST "$URL" \
+  -H "Authorization: Bearer $(cat "$TOKEN_FILE")" \
+  -H 'Content-Type: application/json' \
+  -d "$BODY" >/dev/null 2>&1 &
+HOOK_SH
+chmod +x "$HELPER"
+
+CLAUDE_CMD="bash $HELPER"
+CODEX_CMD="PROVIDER=codex bash $HELPER"
 
 # If {{ $envVar }} was passed, save it now so a single command does both
 # hook setup and token install.
