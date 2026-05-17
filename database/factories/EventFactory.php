@@ -20,10 +20,8 @@ class EventFactory extends Factory
     {
         return [
             'provider' => 'claude-code',
-            'event_type' => 'stop',
             'tokens' => $this->faker->numberBetween(1_000, 80_000),
             'session_id' => (string) Str::uuid(),
-            'raw_payload' => ['hook_event_name' => 'Stop'],
         ];
     }
 }

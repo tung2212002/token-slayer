@@ -7,6 +7,7 @@ use App\Events\HitDealt;
 use App\Models\Boss;
 use App\Models\Event;
 use App\Models\User;
+use App\Services\TranscriptReader;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
 uses(RefreshDatabase::class);
@@ -20,7 +21,7 @@ test('rejects unauthenticated requests', function () {
     $this->postJson('/api/events', ['hook_event_name' => 'SessionStart'])->assertStatus(401);
 });
 
-test('records a non-Stop event and updates last_event_at', function () {
+test('non-Stop event is not persisted but still bumps last_event_at', function () {
     $this->withHeader('Authorization', 'Bearer tok')
         ->postJson('/api/events', [
             'hook_event_name' => 'SessionStart',
@@ -29,14 +30,8 @@ test('records a non-Stop event and updates last_event_at', function () {
         ])
         ->assertCreated();
 
-    $event = Event::sole();
-    expect($event->event_type)->toBe('session-start')
-        ->and($event->provider)->toBe('claude-code')
-        ->and($event->user_id)->toBe($this->user->id)
-        ->and($event->session_id)->toBe('sess-abc')
-        ->and($event->raw_payload['cwd'])->toBe('/home/dev/project');
-
-    expect($this->user->fresh()->last_event_at)->not->toBeNull();
+    expect(Event::count())->toBe(0)
+        ->and($this->user->fresh()->last_event_at)->not->toBeNull();
 });
 
 test('Stop event with tokens damages the current boss and broadcasts HitDealt', function () {
@@ -76,7 +71,7 @@ test('Stop event without inline tokens reads damage from the transcript file', f
         ->assertCreated();
 
     expect(Boss::sole()->current_hp)->toBe(800_000)
-        ->and(Event::where('event_type', 'stop')->sole()->tokens)->toBe(200_000);
+        ->and(Event::sole()->tokens)->toBe(200_000);
 
     @unlink($transcript);
 });
@@ -112,6 +107,7 @@ test('Stop event with no tokens still broadcasts FighterIdled to clear charging 
         return $e->user->is($this->user);
     });
     Illuminate\Support\Facades\Event::assertNotDispatched(HitDealt::class);
+    expect(Event::count())->toBe(0);
 });
 
 test('Stop event retries the transcript read until the assistant entry lands', function () {
@@ -124,7 +120,7 @@ test('Stop event retries the transcript read until the assistant entry lands', f
         'type' => 'user', 'message' => ['content' => [['type' => 'text', 'text' => 'go']]],
     ]));
 
-    $reader = $this->mock(App\Services\TranscriptReader::class);
+    $reader = $this->mock(TranscriptReader::class);
     $reader->shouldReceive('latestTurnOutputTokens')
         ->times(2)
         ->andReturnValues([0, 75_000]);

@@ -53,7 +53,6 @@ class AnnounceBossKill implements ShouldQueue
     {
         return Event::query()
             ->where('boss_id', $killed->id)
-            ->where('event_type', 'stop')
             ->select('user_id', DB::raw('SUM(tokens) as damage'))
             ->groupBy('user_id')
             ->orderByDesc('damage')

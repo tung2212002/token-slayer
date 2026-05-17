@@ -22,7 +22,6 @@ class Event extends Model
     protected function casts(): array
     {
         return [
-            'raw_payload' => 'array',
             'tokens' => 'integer',
         ];
     }

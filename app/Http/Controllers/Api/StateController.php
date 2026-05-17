@@ -20,8 +20,6 @@ class StateController extends Controller
             ->get(['id', 'slack_handle', 'display_name', 'avatar_url', 'last_event_at']);
 
         $log = Event::with('user:id,slack_handle')
-            ->where('event_type', 'stop')
-            ->whereNotNull('tokens')
             ->latest('id')
             ->limit(10)
             ->get(['id', 'user_id', 'tokens', 'created_at']);

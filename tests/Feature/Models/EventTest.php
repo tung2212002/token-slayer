@@ -7,15 +7,12 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 
 uses(RefreshDatabase::class);
 
-test('event factory persists provider, event type, tokens, and raw payload', function () {
+test('event factory persists provider and tokens', function () {
     $event = Event::factory()->for(User::factory())->for(Boss::factory())->create([
         'provider' => 'claude-code',
-        'event_type' => 'stop',
         'tokens' => 23_400,
     ]);
 
-    expect($event->raw_payload)->toBeArray()
-        ->and($event->provider)->toBe('claude-code')
-        ->and($event->event_type)->toBe('stop')
+    expect($event->provider)->toBe('claude-code')
         ->and($event->tokens)->toBe(23_400);
 });

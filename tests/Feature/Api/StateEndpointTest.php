@@ -11,7 +11,7 @@ test('state endpoint returns current boss, active fighters, and recent log', fun
     Boss::factory()->create(['number' => 5, 'max_hp' => 5_000_000, 'current_hp' => 3_200_000]);
     $active = User::factory()->create(['last_event_at' => now()->subMinutes(5)]);
     $idle = User::factory()->create(['last_event_at' => now()->subHour()]);
-    Event::factory()->for($active)->create(['event_type' => 'stop', 'tokens' => 1234, 'created_at' => now()->subMinute()]);
+    Event::factory()->for($active)->create(['tokens' => 1234, 'created_at' => now()->subMinute()]);
 
     $body = $this->getJson('/api/state')->assertOk()->json();
 

@@ -33,18 +33,6 @@ class EventController extends Controller
         $provider = $request->query('provider', 'claude-code');
         $tokens = $this->resolveStopTokens($eventType, $payload);
 
-        $boss = Boss::where('status', 'alive')->orderByDesc('number')->first();
-
-        Event::create([
-            'user_id' => $user->id,
-            'boss_id' => $boss?->id,
-            'provider' => $provider,
-            'event_type' => $eventType,
-            'tokens' => $tokens,
-            'session_id' => $payload['session_id'] ?? null,
-            'raw_payload' => $payload,
-        ]);
-
         $user->forceFill(['last_event_at' => now()])->save();
 
         if ($eventType === 'user-prompt-submit') {
@@ -61,6 +49,16 @@ class EventController extends Controller
 
         if ($eventType === 'stop') {
             if ($tokens > 0) {
+                $boss = Boss::where('status', 'alive')->orderByDesc('number')->first();
+
+                Event::create([
+                    'user_id' => $user->id,
+                    'boss_id' => $boss?->id,
+                    'provider' => $provider,
+                    'tokens' => $tokens,
+                    'session_id' => $payload['session_id'] ?? null,
+                ]);
+
                 $result = $this->damage->apply($user, $tokens);
 
                 foreach ($result->killedBosses as $killed) {
