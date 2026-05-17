@@ -3,9 +3,11 @@ import { bus } from './bus.js';
 const TOP_ROWS = 5;
 const ROW_TOP_Y = 10;
 const ROW_HEIGHT = 14;
+const HANDLE_WIDTH = 10;
+const DAMAGE_WIDTH = 4;
 
 export function createLeaderboard(scene) {
-  const damageByFighter = new Map();
+  const fighters = new Map();
   const isPortrait = scene.mode === 'portrait';
 
   const rows = isPortrait
@@ -20,46 +22,68 @@ export function createLeaderboard(scene) {
       }, 3).setOrigin(1, 0);
     });
 
+  function resolveHandle(userId, stored) {
+    return stored || scene.fighters.get(userId)?.handleText || `#${userId}`;
+  }
+
+  function ranked() {
+    return [...fighters.entries()]
+      .sort((a, b) => b[1].damage - a[1].damage);
+  }
+
   function render() {
-    const ranked = [...damageByFighter.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, TOP_ROWS);
+    const top = ranked().slice(0, TOP_ROWS);
 
     if (isPortrait) {
-      bus.emit('leaderboard-updated', ranked.map(([userId, damage]) => ({
+      bus.emit('leaderboard-updated', top.map(([userId, entry]) => ({
         userId,
-        handle: scene.fighters.get(userId)?.handleText || `#${userId}`,
-        damage,
+        handle: resolveHandle(userId, entry.handle),
+        damage: entry.damage,
       })));
       return;
     }
 
     for (let i = 0; i < TOP_ROWS; i++) {
-      if (ranked[i]) {
-        const [userId, total] = ranked[i];
-        const fighter = scene.fighters.get(userId);
-        const handle = fighter?.handleText || `#${userId}`;
-        rows[i].setText(`${i + 1}. ${handle}  ${abbreviateDamage(total)}`);
+      if (top[i]) {
+        const [userId, entry] = top[i];
+        const handle = fitHandle(resolveHandle(userId, entry.handle));
+        const damage = abbreviateDamage(entry.damage).padStart(DAMAGE_WIDTH);
+        rows[i].setText(`${i + 1}. ${handle} ${damage}`);
       } else {
         rows[i].setText('');
       }
     }
   }
 
+  function fitHandle(handle) {
+    if (handle.length > HANDLE_WIDTH) {
+      return handle.slice(0, HANDLE_WIDTH - 1) + '…';
+    }
+    return handle.padEnd(HANDLE_WIDTH);
+  }
+
   return {
-    onHit(userId, damage) {
+    onHit(userId, damage, handle) {
       if (damage <= 0) {
         return;
       }
-      damageByFighter.set(userId, (damageByFighter.get(userId) ?? 0) + damage);
+      const existing = fighters.get(userId);
+      fighters.set(userId, {
+        damage: (existing?.damage ?? 0) + damage,
+        handle: handle || existing?.handle || '',
+      });
       render();
     },
     reset() {
-      damageByFighter.clear();
+      fighters.clear();
       render();
     },
     getRanked() {
-      return [...damageByFighter.entries()].sort((a, b) => b[1] - a[1]);
+      return ranked().map(([userId, entry]) => [
+        userId,
+        entry.damage,
+        resolveHandle(userId, entry.handle),
+      ]);
     },
   };
 }
@@ -69,9 +93,9 @@ export function showMvpCard(scene, { bossLabel, ranked, killerHandle }) {
     bus.emit('show-mvp-overlay', {
       bossLabel,
       killerHandle,
-      ranked: ranked.map(([userId, damage]) => ({
+      ranked: ranked.map(([userId, damage, handle]) => ({
         userId,
-        handle: scene.fighters.get(userId)?.handleText || `#${userId}`,
+        handle: handle || `#${userId}`,
         damage,
       })),
     });
@@ -153,10 +177,8 @@ export function showMvpCard(scene, { bossLabel, ranked, killerHandle }) {
   });
 }
 
-function mvpLabel(scene, [userId, total]) {
-  const fighter = scene.fighters.get(userId);
-  const handle = fighter?.handle?.text || `#${userId}`;
-  return `${handle}  —  ${total.toLocaleString()} dmg`;
+function mvpLabel(scene, [userId, total, handle]) {
+  return `${handle || `#${userId}`}  —  ${total.toLocaleString()} dmg`;
 }
 
 function abbreviateDamage(n) {

@@ -207,7 +207,7 @@ export class BattlefieldScene extends Phaser.Scene {
     const fromY = fighter ? fighter.pos.y : this.layout.logicalHeight / 2;
     spawnProjectile(this, fromX, fromY, () => {
       const damage = Math.max(0, this.bossState.currentHp - payload.boss_hp_after);
-      this.leaderboard?.onHit(payload.user_id, damage);
+      this.leaderboard?.onHit(payload.user_id, damage, payload.slack_handle);
       applyImpact(this, payload.boss_hp_after);
     });
   }
