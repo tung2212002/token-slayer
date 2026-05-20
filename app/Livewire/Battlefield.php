@@ -6,6 +6,7 @@ use App\Models\Boss;
 use App\Models\Event;
 use App\Models\User;
 use App\Services\BossArena;
+use App\Services\FighterChargingCache;
 use Illuminate\Support\Facades\DB;
 use Livewire\Component;
 
@@ -15,11 +16,15 @@ class Battlefield extends Component
 
     public $fighters = [];
 
-    public function mount(BossArena $arena): void
+    /** @var array<int, array{activity: ?string, started_at: string}|null> */
+    public array $chargingByUser = [];
+
+    public function mount(BossArena $arena, FighterChargingCache $chargingCache): void
     {
         $this->boss = $arena->current();
         $this->fighters = User::where('last_event_at', '>=', now()->subMinutes(config('game.idle_minutes')))
             ->get();
+        $this->chargingByUser = $chargingCache->many($this->fighters->pluck('id')->all());
     }
 
     /**
