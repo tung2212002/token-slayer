@@ -469,14 +469,22 @@ export class BattlefieldScene extends Phaser.Scene {
     let i = 0;
     for (const entry of this.fighters.values()) {
       const target = positions[i++];
-      const tweenTargets = entry.handle ? [entry.sprite, entry.handle] : [entry.sprite];
       this.tweens.add({
-        targets: tweenTargets,
+        targets: entry.sprite,
         x: target.x,
         y: target.y,
         duration: 200,
         ease: 'Quad.easeOut',
       });
+      if (entry.handle) {
+        this.tweens.add({
+          targets: entry.handle,
+          x: target.x,
+          y: target.y + entry.displaySize / 2 + 9,
+          duration: 200,
+          ease: 'Quad.easeOut',
+        });
+      }
       entry.pos = target;
     }
 
