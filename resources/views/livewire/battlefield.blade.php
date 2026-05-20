@@ -12,7 +12,7 @@
                 'id' => $f->id,
                 'handle' => $f->displayHandle(),
                 'avatarUrl' => route('avatar', $f),
-                'charging' => $chargingByUser[$f->id] ?? null,
+                'charging' => $this->chargingByUser[$f->id] ?? null,
             ])->values(),
             'leaderboard' => $this->leaderboardForCurrentBoss(),
         ]) }}"

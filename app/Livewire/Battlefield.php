@@ -17,7 +17,7 @@ class Battlefield extends Component
     public $fighters = [];
 
     /** @var array<int, array{activity: ?string, started_at: string}|null> */
-    public array $chargingByUser = [];
+    protected array $chargingByUser = [];
 
     public function mount(BossArena $arena, FighterChargingCache $chargingCache): void
     {
