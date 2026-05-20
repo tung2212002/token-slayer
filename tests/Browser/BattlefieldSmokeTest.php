@@ -2,6 +2,7 @@
 
 use App\Models\Boss;
 use App\Models\User;
+use App\Services\FighterChargingCache;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
 uses(RefreshDatabase::class);
@@ -110,5 +111,20 @@ test('hit from a user not in the fighter row still applies damage', function () 
     $page->wait(800);
 
     expect($page->script('return window.__battlefield.bossHp();'))->toBe(600);
+    $page->assertNoJavaScriptErrors();
+});
+
+test('fighter with cached charging activity renders the charge on initial load', function () {
+    ensureChrome();
+    Boss::factory()->create(['number' => 1, 'max_hp' => 1_000, 'current_hp' => 1_000]);
+    $fighter = User::factory()->create(['last_event_at' => now()->subMinute()]);
+
+    app(FighterChargingCache::class)->put($fighter->id, 'Bash: npm install');
+
+    $page = visit('/battlefield');
+    $page->wait(700); // Phaser boot + bootstrap loop
+
+    $hasCharge = $page->script("return window.__battlefield.scene.charges.has({$fighter->id});");
+    expect($hasCharge)->toBeTrue();
     $page->assertNoJavaScriptErrors();
 });
