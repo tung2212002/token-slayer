@@ -75,6 +75,22 @@ test('boss HP is not updated before the projectile impact', function () {
     $page->assertNoJavaScriptErrors();
 });
 
+test('fighter without an avatar URL still renders on the battlefield', function () {
+    ensureChrome();
+    Boss::factory()->create(['number' => 1, 'max_hp' => 1_000, 'current_hp' => 1_000]);
+    $fighter = User::factory()->create([
+        'avatar_url' => null,
+        'last_event_at' => now()->subMinute(),
+    ]);
+
+    $page = visit('/battlefield');
+    $page->wait(500);
+
+    $hasFighter = $page->script("return window.__battlefield.scene.fighters.has({$fighter->id});");
+    expect($hasFighter)->toBeTrue();
+    $page->assertNoJavaScriptErrors();
+});
+
 test('hit from a user not in the fighter row still applies damage', function () {
     ensureChrome();
     Boss::factory()->create(['number' => 1, 'max_hp' => 1_000, 'current_hp' => 1_000]);

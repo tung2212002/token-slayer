@@ -382,26 +382,63 @@ export class BattlefieldScene extends Phaser.Scene {
     this.charges.delete(userId);
   }
 
-  async loadAvatarTexture(fighter) {
+  loadAvatarTexture(fighter) {
     const key = `fighter-${fighter.id}`;
+    if (this.textures.exists(key)) {
+      return Promise.resolve(key);
+    }
+    if (!fighter.avatarUrl) {
+      return Promise.reject(new Error('no avatar URL'));
+    }
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        if (this.textures.exists(key)) {
+          resolve(key);
+          return;
+        }
+        this.textures.addImage(key, img);
+        this.textures.get(key).setFilter(Phaser.Textures.FilterMode.LINEAR);
+        resolve(key);
+      };
+      img.onerror = () => reject(new Error(`avatar load failed: ${fighter.avatarUrl}`));
+      img.src = fighter.avatarUrl;
+    });
+  }
+
+  makeFallbackAvatarTexture(fighter) {
+    const key = `fighter-${fighter.id}-fallback`;
     if (this.textures.exists(key)) {
       return key;
     }
-    await new Promise((resolve, reject) => {
-      this.load.image(key, fighter.avatarUrl);
-      this.load.once(`filecomplete-image-${key}`, () => resolve());
-      this.load.once('loaderror', file => {
-        if (file && file.key === key) {
-          reject(new Error(`avatar load failed: ${fighter.avatarUrl}`));
-        }
-      });
-      this.load.start();
-    });
+    const size = 64;
+    const radius = size / 2;
+    const palette = [0x6366f1, 0x10b981, 0xf59e0b, 0xec4899, 0x14b8a6, 0xf97316, 0x8b5cf6, 0x0ea5e9];
+    const color = palette[Math.abs(Number(fighter.id) || 0) % palette.length];
+    const initial = (fighter.handle ?? '').trim().charAt(0).toUpperCase() || '?';
+
+    const rt = this.add.renderTexture(0, 0, size, size).setVisible(false);
+    const circle = this.add.graphics({ x: 0, y: 0 }).setVisible(false);
+    circle.fillStyle(color, 1);
+    circle.fillCircle(radius, radius, radius);
+    rt.draw(circle, 0, 0);
+    const label = this.add.text(0, 0, initial, {
+      fontFamily: 'monospace',
+      fontSize: '36px',
+      color: '#ffffff',
+    }).setOrigin(0.5).setVisible(false);
+    rt.draw(label, radius, radius);
+    rt.saveTexture(key);
+    circle.destroy();
+    label.destroy();
+    rt.destroy();
+
     this.textures.get(key).setFilter(Phaser.Textures.FilterMode.LINEAR);
     return key;
   }
 
-  async handleFighterJoined(payload) {
+  handleFighterJoined(payload) {
     if (this.fighters.has(payload.user_id)) {
       return;
     }
@@ -436,7 +473,7 @@ export class BattlefieldScene extends Phaser.Scene {
     }
 
     const newPos = positions[positions.length - 1];
-    await this.addFighter(fighter, newPos, config);
+    this.addFighter(fighter, newPos, config);
     const entry = this.fighters.get(fighter.id);
     if (!entry) {
       return;
@@ -451,17 +488,13 @@ export class BattlefieldScene extends Phaser.Scene {
     });
   }
 
-  async addFighter(fighter, pos, options = {}) {
-    let key;
-    try {
-      key = await this.loadAvatarTexture(fighter);
-    } catch (e) {
-      console.warn('[battlefield]', e.message);
-      return;
-    }
+  addFighter(fighter, pos, options = {}) {
+    const initialKey = this.textures.exists(`fighter-${fighter.id}`)
+      ? `fighter-${fighter.id}`
+      : this.makeFallbackAvatarTexture(fighter);
     const size = options.displaySize ?? 24;
     const radius = size / 2;
-    const sprite = this.add.image(pos.x, pos.y, key).setDisplaySize(size, size);
+    const sprite = this.add.image(pos.x, pos.y, initialKey).setDisplaySize(size, size);
     const maskShape = this.make.graphics({ x: pos.x, y: pos.y, add: false });
     maskShape.fillCircle(0, 0, radius);
     sprite.setMask(maskShape.createGeometryMask());
@@ -480,5 +513,13 @@ export class BattlefieldScene extends Phaser.Scene {
       maskShape,
       displaySize: size,
     });
+
+    if (initialKey !== `fighter-${fighter.id}`) {
+      this.loadAvatarTexture(fighter).then(realKey => {
+        if (sprite.scene) {
+          sprite.setTexture(realKey).setDisplaySize(size, size);
+        }
+      }).catch(e => console.warn('[battlefield]', e.message));
+    }
   }
 }
