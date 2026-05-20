@@ -15,6 +15,14 @@ function truncateActivity(activity) {
   return activity.slice(0, ACTIVITY_MAX_CHARS - 1) + '…';
 }
 
+const HANDLE_MAX_CHARS = 6;
+function truncateHandle(handle) {
+  if (!handle || handle.length <= HANDLE_MAX_CHARS) {
+    return handle ?? '';
+  }
+  return handle.slice(0, HANDLE_MAX_CHARS - 1) + '…';
+}
+
 export class BattlefieldScene extends Phaser.Scene {
   constructor() {
     super('battlefield');
@@ -500,7 +508,7 @@ export class BattlefieldScene extends Phaser.Scene {
     sprite.setMask(maskShape.createGeometryMask());
     const handle = options.showHandle === false
       ? null
-      : this.addSharpText(pos.x, pos.y + radius + 9, fighter.handle ?? '', {
+      : this.addSharpText(pos.x, pos.y + radius + 9, truncateHandle(fighter.handle), {
         fontFamily: 'monospace',
         fontSize: '8px',
         color: '#fbbf24',
