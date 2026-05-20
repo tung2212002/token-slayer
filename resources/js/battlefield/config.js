@@ -1,4 +1,4 @@
-export const BG_COLOR = 0x0f172a;
+export const BG_COLOR = 0x020617;
 
 export const LAYOUTS = {
   landscape: {
