@@ -7,14 +7,17 @@ use App\Events\HitDealt;
 use App\Models\Boss;
 use App\Models\Event;
 use App\Models\User;
+use App\Services\FighterChargingCache;
 use App\Services\TranscriptReader;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 
 uses(RefreshDatabase::class);
 
 beforeEach(function () {
     $this->user = User::factory()->create(['hook_token' => hash('sha256', 'tok')]);
     Boss::factory()->create(['number' => 1, 'max_hp' => 1_000_000, 'current_hp' => 1_000_000]);
+    Cache::flush();
 });
 
 test('rejects unauthenticated requests', function () {
@@ -154,4 +157,59 @@ test('Stop event killing the boss broadcasts BossKilled then BossSpawned', funct
 
     Illuminate\Support\Facades\Event::assertDispatched(BossKilled::class);
     Illuminate\Support\Facades\Event::assertDispatched(BossSpawned::class);
+});
+
+test('user-prompt-submit caches the fighter activity', function () {
+    $this->withHeader('Authorization', 'Bearer tok')
+        ->postJson('/api/events', [
+            'hook_event_name' => 'UserPromptSubmit',
+            'session_id' => 'sess-1',
+        ])
+        ->assertCreated();
+
+    $entry = app(FighterChargingCache::class)->many([$this->user->id])[$this->user->id];
+    expect($entry['activity'])->toBe('thinking…');
+});
+
+test('pre-tool-use caches the summarized tool activity', function () {
+    $this->withHeader('Authorization', 'Bearer tok')
+        ->postJson('/api/events', [
+            'hook_event_name' => 'PreToolUse',
+            'tool_name' => 'Bash',
+            'tool_input' => ['command' => 'npm install'],
+        ])
+        ->assertCreated();
+
+    $entry = app(FighterChargingCache::class)->many([$this->user->id])[$this->user->id];
+    expect($entry['activity'])->toStartWith('$ npm install');
+});
+
+test('stop with tokens clears the cached charging entry', function () {
+    app(FighterChargingCache::class)->put($this->user->id, 'thinking…');
+
+    $this->withHeader('Authorization', 'Bearer tok')
+        ->postJson('/api/events', [
+            'hook_event_name' => 'Stop',
+            'session_id' => 'sess-1',
+            'tokens' => 250_000,
+        ])
+        ->assertCreated();
+
+    $entry = app(FighterChargingCache::class)->many([$this->user->id])[$this->user->id];
+    expect($entry)->toBeNull();
+});
+
+test('stop with zero tokens clears the cached charging entry', function () {
+    app(FighterChargingCache::class)->put($this->user->id, 'thinking…');
+
+    $this->withHeader('Authorization', 'Bearer tok')
+        ->postJson('/api/events', [
+            'hook_event_name' => 'Stop',
+            'session_id' => 'sess-1',
+            'tokens' => 0,
+        ])
+        ->assertCreated();
+
+    $entry = app(FighterChargingCache::class)->many([$this->user->id])[$this->user->id];
+    expect($entry)->toBeNull();
 });

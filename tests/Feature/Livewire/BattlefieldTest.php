@@ -4,6 +4,7 @@ use App\Livewire\Battlefield;
 use App\Models\Boss;
 use App\Models\Event;
 use App\Models\User;
+use App\Services\FighterChargingCache;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 
@@ -90,4 +91,18 @@ test('battlefield payloads fall back to user name when slack_handle is null', fu
     Livewire::test(Battlefield::class)
         ->assertSeeHtml('&quot;userId&quot;:'.$user->id.',&quot;handle&quot;:&quot;Trung&quot;,&quot;damage&quot;:750')
         ->assertSeeHtml('&quot;id&quot;:'.$user->id.',&quot;handle&quot;:&quot;Trung&quot;');
+});
+
+test('battlefield ships cached charging activity in the data payload', function () {
+    Boss::factory()->create();
+    $busy = User::factory()->create(['last_event_at' => now()->subMinute()]);
+    $idle = User::factory()->create(['last_event_at' => now()->subMinute()]);
+
+    app(FighterChargingCache::class)->put($busy->id, 'Bash: npm install');
+
+    Livewire::test(Battlefield::class)
+        ->assertSeeHtml('&quot;id&quot;:'.$busy->id.',&quot;handle&quot;')
+        ->assertSeeHtml('&quot;charging&quot;:{&quot;activity&quot;:&quot;Bash: npm install&quot;')
+        ->assertSeeHtml('&quot;id&quot;:'.$idle->id)
+        ->assertSeeHtml('&quot;charging&quot;:null');
 });

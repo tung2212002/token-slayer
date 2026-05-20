@@ -12,6 +12,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Boss;
 use App\Models\Event;
 use App\Services\DamageService;
+use App\Services\FighterChargingCache;
 use App\Services\TranscriptReader;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -21,6 +22,7 @@ class EventController extends Controller
     public function __construct(
         private DamageService $damage,
         private TranscriptReader $transcripts,
+        private FighterChargingCache $chargingCache,
     ) {}
 
     public function store(Request $request): JsonResponse
@@ -36,11 +38,14 @@ class EventController extends Controller
         $user->forceFill(['last_event_at' => now()])->save();
 
         if ($eventType === 'user-prompt-submit') {
+            $this->chargingCache->put($user->id, 'thinking…');
             $this->dispatchSafely(new FighterCharging($user, 'thinking…'));
         }
 
         if ($eventType === 'pre-tool-use') {
-            $this->dispatchSafely(new FighterCharging($user, $this->summarizeToolUse($payload)));
+            $activity = $this->summarizeToolUse($payload);
+            $this->chargingCache->put($user->id, $activity);
+            $this->dispatchSafely(new FighterCharging($user, $activity));
         }
 
         if ($eventType === 'session-start') {
@@ -48,6 +53,8 @@ class EventController extends Controller
         }
 
         if ($eventType === 'stop') {
+            $this->chargingCache->forget($user->id);
+
             if ($tokens > 0) {
                 $boss = Boss::where('status', 'alive')->orderByDesc('number')->first();
 

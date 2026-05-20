@@ -157,6 +157,15 @@ export class BattlefieldScene extends Phaser.Scene {
     this.leaderboard.seed(state.leaderboard ?? []);
 
     this.charges = new Map();
+    // Synthesizes the live `fighter-charging` payload shape — keep in sync with FighterCharging::broadcastWith().
+    for (const f of state.fighters) {
+      if (f.charging) {
+        this.handleCharging({
+          user_id: f.id,
+          activity: f.charging.activity,
+        });
+      }
+    }
     this._busHandlers = {
       'hit': payload => this.handleHit(payload),
       'boss-spawned': payload => this.handleBossSpawned(payload),
