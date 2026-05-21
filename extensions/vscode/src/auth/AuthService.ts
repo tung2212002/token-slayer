@@ -7,9 +7,9 @@ export interface AuthState {
 }
 
 interface SecretStorageLike {
-  get(key: string): Promise<string | undefined>;
-  store(key: string, value: string): Promise<void>;
-  delete(key: string): Promise<void>;
+  get(key: string): Thenable<string | undefined>;
+  store(key: string, value: string): Thenable<void>;
+  delete(key: string): Thenable<void>;
 }
 
 export interface AuthServiceDeps {
