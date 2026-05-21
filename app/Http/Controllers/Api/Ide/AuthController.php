@@ -43,4 +43,28 @@ class AuthController extends Controller
 
         return response()->noContent();
     }
+
+    public function sessionUrl(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'path' => ['required', 'string'],
+        ]);
+
+        $parsed = parse_url($data['path']);
+        $path = $parsed['path'] ?? '';
+        $query = $parsed['query'] ?? '';
+
+        $allowedPaths = ['/battlefield', '/profile', '/history'];
+        if (! in_array($path, $allowedPaths, true)) {
+            return response()->json(['error' => 'path_not_allowed'], 422);
+        }
+
+        [$plain] = IdeAccessToken::issueSessionUrl($request->user(), $data['path'], 30);
+
+        $separator = $query === '' ? '?' : '&';
+
+        return response()->json([
+            'url' => url($data['path']).$separator.'_t='.$plain,
+        ]);
+    }
 }

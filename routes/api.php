@@ -17,6 +17,7 @@ Route::prefix('ide')->group(function (): void {
 
     Route::middleware('ide.bearer')->group(function (): void {
         Route::post('/auth/revoke', [AuthController::class, 'revoke']);
+        Route::post('/auth/session-url', [AuthController::class, 'sessionUrl']);
         Route::get('/me', MeController::class);
         Route::get('/hook-config', HookConfigController::class);
     });
