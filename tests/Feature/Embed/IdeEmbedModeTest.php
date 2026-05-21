@@ -35,17 +35,18 @@ test('battlefield with embed=ide does NOT include bridge script for guests', fun
         ->not->toContain('ide-bridge');
 });
 
-test('embed=ide strips X-Frame-Options and sets a permissive frame-ancestors CSP', function () {
+test('embed=ide strips X-Frame-Options and sets a webview-friendly frame-ancestors CSP', function () {
     $response = $this->get('/battlefield?embed=ide')->assertOk();
 
     expect($response->headers->get('X-Frame-Options'))->toBeNull();
     expect($response->headers->get('Content-Security-Policy'))
-        ->toBe('frame-ancestors *');
+        ->toContain('frame-ancestors')
+        ->toContain('vscode-webview:');
 });
 
 test('non-embed requests do not inject the embed CSP', function () {
     $response = $this->get('/battlefield')->assertOk();
 
     $csp = $response->headers->get('Content-Security-Policy');
-    expect($csp === null || ! str_contains($csp, 'frame-ancestors *'))->toBeTrue();
+    expect($csp === null || ! str_contains($csp, 'vscode-webview'))->toBeTrue();
 });
