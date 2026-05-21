@@ -33,12 +33,7 @@ class AuthController extends Controller
         $plain = $request->bearerToken();
 
         if ($plain !== null) {
-            $token = IdeAccessToken::query()
-                ->where('kind', 'bearer')
-                ->where('token_hash', hash('sha256', $plain))
-                ->first();
-
-            $token?->revoke();
+            IdeAccessToken::findActiveBearer($plain)?->revoke();
         }
 
         return response()->noContent();

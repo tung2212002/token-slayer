@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Database\Factories\IdeAccessTokenFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -15,12 +16,20 @@ class IdeAccessToken extends Model
 
     protected $guarded = [];
 
-    protected $casts = [
-        'expires_at' => 'datetime',
-        'consumed_at' => 'datetime',
-        'revoked_at' => 'datetime',
-        'last_used_at' => 'datetime',
-    ];
+    /**
+     * Get the attributes that should be cast.
+     *
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'expires_at' => 'datetime',
+            'consumed_at' => 'datetime',
+            'revoked_at' => 'datetime',
+            'last_used_at' => 'datetime',
+        ];
+    }
 
     public function user(): BelongsTo
     {
@@ -32,41 +41,23 @@ class IdeAccessToken extends Model
      */
     public static function issueOneTime(User $user, string $state, int $ttlSeconds): array
     {
-        $plain = Str::random(64);
-
-        $token = self::create([
-            'user_id' => $user->id,
-            'kind' => 'one_time',
-            'token_hash' => hash('sha256', $plain),
+        return self::issue($user, 'one_time', [
             'state_hash' => hash('sha256', $state),
             'expires_at' => now()->addSeconds($ttlSeconds),
         ]);
-
-        return [$plain, $token];
     }
 
     public static function consumeOneTime(string $plain, string $state): ?User
     {
         $tokenHash = hash('sha256', $plain);
-        $stateHash = hash('sha256', $state);
 
-        $affected = self::query()
-            ->where('kind', 'one_time')
-            ->where('token_hash', $tokenHash)
-            ->where('state_hash', $stateHash)
-            ->whereNull('consumed_at')
-            ->where('expires_at', '>', now())
-            ->update(['consumed_at' => now()]);
+        $consumed = self::atomicConsume(
+            self::whereKind('one_time')
+                ->where('token_hash', $tokenHash)
+                ->where('state_hash', hash('sha256', $state))
+        );
 
-        if ($affected === 0) {
-            return null;
-        }
-
-        return self::query()
-            ->where('kind', 'one_time')
-            ->where('token_hash', $tokenHash)
-            ->first()
-            ?->user;
+        return $consumed ? self::whereKindAndHash('one_time', $tokenHash)->first()?->user : null;
     }
 
     /**
@@ -74,24 +65,12 @@ class IdeAccessToken extends Model
      */
     public static function issueBearer(User $user): array
     {
-        $plain = Str::random(64);
-
-        $token = self::create([
-            'user_id' => $user->id,
-            'kind' => 'bearer',
-            'token_hash' => hash('sha256', $plain),
-        ]);
-
-        return [$plain, $token];
+        return self::issue($user, 'bearer');
     }
 
     public static function resolveBearer(string $plain): ?User
     {
-        $token = self::query()
-            ->where('kind', 'bearer')
-            ->where('token_hash', hash('sha256', $plain))
-            ->whereNull('revoked_at')
-            ->first();
+        $token = self::findActiveBearer($plain);
 
         if ($token === null) {
             return null;
@@ -102,22 +81,22 @@ class IdeAccessToken extends Model
         return $token->user;
     }
 
+    public static function findActiveBearer(string $plain): ?self
+    {
+        return self::whereKindAndHash('bearer', hash('sha256', $plain))
+            ->whereNull('revoked_at')
+            ->first();
+    }
+
     /**
      * @return array{0: string, 1: self}
      */
     public static function issueSessionUrl(User $user, string $redirectPath, int $ttlSeconds): array
     {
-        $plain = Str::random(64);
-
-        $token = self::create([
-            'user_id' => $user->id,
-            'kind' => 'session_url',
-            'token_hash' => hash('sha256', $plain),
+        return self::issue($user, 'session_url', [
             'redirect_path' => $redirectPath,
             'expires_at' => now()->addSeconds($ttlSeconds),
         ]);
-
-        return [$plain, $token];
     }
 
     /**
@@ -127,27 +106,17 @@ class IdeAccessToken extends Model
     {
         $tokenHash = hash('sha256', $plain);
 
-        $affected = self::query()
-            ->where('kind', 'session_url')
-            ->where('token_hash', $tokenHash)
-            ->whereNull('consumed_at')
-            ->where('expires_at', '>', now())
-            ->update(['consumed_at' => now()]);
+        $consumed = self::atomicConsume(
+            self::whereKind('session_url')->where('token_hash', $tokenHash)
+        );
 
-        if ($affected === 0) {
+        if (! $consumed) {
             return null;
         }
 
-        $token = self::query()
-            ->where('kind', 'session_url')
-            ->where('token_hash', $tokenHash)
-            ->first();
+        $token = self::whereKindAndHash('session_url', $tokenHash)->first();
 
-        if ($token === null) {
-            return null;
-        }
-
-        return ['user' => $token->user, 'redirectPath' => $token->redirect_path ?? '/'];
+        return $token ? ['user' => $token->user, 'redirectPath' => $token->redirect_path ?? '/'] : null;
     }
 
     public function revoke(): void
@@ -158,5 +127,45 @@ class IdeAccessToken extends Model
     protected static function newFactory(): IdeAccessTokenFactory
     {
         return IdeAccessTokenFactory::new();
+    }
+
+    /**
+     * @param  array<string, mixed>  $attributes
+     * @return array{0: string, 1: self}
+     */
+    private static function issue(User $user, string $kind, array $attributes = []): array
+    {
+        $plain = Str::random(64);
+
+        $token = self::create([
+            'user_id' => $user->id,
+            'kind' => $kind,
+            'token_hash' => hash('sha256', $plain),
+            ...$attributes,
+        ]);
+
+        return [$plain, $token];
+    }
+
+    /**
+     * Atomically mark a single unconsumed, unexpired token as consumed.
+     * Returns true when exactly one row was updated.
+     */
+    private static function atomicConsume(Builder $query): bool
+    {
+        return $query
+            ->whereNull('consumed_at')
+            ->where('expires_at', '>', now())
+            ->update(['consumed_at' => now()]) > 0;
+    }
+
+    private static function whereKind(string $kind): Builder
+    {
+        return self::query()->where('kind', $kind);
+    }
+
+    private static function whereKindAndHash(string $kind, string $tokenHash): Builder
+    {
+        return self::whereKind($kind)->where('token_hash', $tokenHash);
     }
 }
