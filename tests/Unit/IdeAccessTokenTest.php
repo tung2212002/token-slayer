@@ -64,3 +64,46 @@ test('revoke invalidates a bearer', function () {
 
     expect(IdeAccessToken::resolveBearer($plain))->toBeNull();
 });
+
+test('resolveBearer updates last_used_at on each call', function () {
+    $user = User::factory()->create();
+    [$plain, $token] = IdeAccessToken::issueBearer($user);
+
+    expect($token->last_used_at)->toBeNull();
+
+    IdeAccessToken::resolveBearer($plain);
+
+    $touched = $token->fresh();
+    expect($touched->last_used_at)->not->toBeNull();
+});
+
+test('issueSessionUrl stores the redirect path and is consumable once', function () {
+    $user = User::factory()->create();
+
+    [$plain, $token] = IdeAccessToken::issueSessionUrl(
+        user: $user,
+        redirectPath: '/battlefield?embed=ide',
+        ttlSeconds: 30,
+    );
+
+    expect($token->kind)->toBe('session_url');
+    expect($token->redirect_path)->toBe('/battlefield?embed=ide');
+
+    $first = IdeAccessToken::consumeSessionUrl($plain);
+    expect($first)->toMatchArray([
+        'user' => $user->is($first['user']) ? $first['user'] : null,
+        'redirectPath' => '/battlefield?embed=ide',
+    ]);
+    expect($first['user']->id)->toBe($user->id);
+
+    expect(IdeAccessToken::consumeSessionUrl($plain))->toBeNull();
+});
+
+test('consumeSessionUrl rejects expired tokens', function () {
+    $user = User::factory()->create();
+    [$plain] = IdeAccessToken::issueSessionUrl($user, '/battlefield', 1);
+
+    $this->travel(2)->seconds();
+
+    expect(IdeAccessToken::consumeSessionUrl($plain))->toBeNull();
+});

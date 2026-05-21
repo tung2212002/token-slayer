@@ -47,21 +47,25 @@ class IdeAccessToken extends Model
 
     public static function consumeOneTime(string $plain, string $state): ?User
     {
-        $token = self::query()
+        $tokenHash = hash('sha256', $plain);
+        $stateHash = hash('sha256', $state);
+
+        $affected = self::query()
             ->where('kind', 'one_time')
-            ->where('token_hash', hash('sha256', $plain))
-            ->where('state_hash', hash('sha256', $state))
+            ->where('token_hash', $tokenHash)
+            ->where('state_hash', $stateHash)
             ->whereNull('consumed_at')
             ->where('expires_at', '>', now())
-            ->first();
+            ->update(['consumed_at' => now()]);
 
-        if ($token === null) {
+        if ($affected === 0) {
             return null;
         }
 
-        $token->update(['consumed_at' => now()]);
-
-        return $token->user;
+        return self::query()
+            ->where('token_hash', $tokenHash)
+            ->first()
+            ?->user;
     }
 
     /**
@@ -120,18 +124,26 @@ class IdeAccessToken extends Model
      */
     public static function consumeSessionUrl(string $plain): ?array
     {
-        $token = self::query()
+        $tokenHash = hash('sha256', $plain);
+
+        $affected = self::query()
             ->where('kind', 'session_url')
-            ->where('token_hash', hash('sha256', $plain))
+            ->where('token_hash', $tokenHash)
             ->whereNull('consumed_at')
             ->where('expires_at', '>', now())
+            ->update(['consumed_at' => now()]);
+
+        if ($affected === 0) {
+            return null;
+        }
+
+        $token = self::query()
+            ->where('token_hash', $tokenHash)
             ->first();
 
         if ($token === null) {
             return null;
         }
-
-        $token->update(['consumed_at' => now()]);
 
         return ['user' => $token->user, 'redirectPath' => $token->redirect_path ?? '/'];
     }

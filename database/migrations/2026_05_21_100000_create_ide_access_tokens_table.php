@@ -15,11 +15,11 @@ return new class extends Migration
             $table->string('token_hash', 64)->unique();
             $table->string('state_hash', 64)->nullable()->index();
             $table->string('redirect_path', 255)->nullable();
-            $table->timestamp('expires_at')->nullable();
-            $table->timestamp('consumed_at')->nullable();
-            $table->timestamp('revoked_at')->nullable();
-            $table->timestamp('last_used_at')->nullable();
-            $table->timestamps();
+            $table->timestampTz('expires_at')->nullable();
+            $table->timestampTz('consumed_at')->nullable();
+            $table->timestampTz('revoked_at')->nullable();
+            $table->timestampTz('last_used_at')->nullable();
+            $table->timestampsTz();
         });
     }
 
