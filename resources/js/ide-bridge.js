@@ -9,12 +9,17 @@
  * Field names below mirror the broadcastWith() payloads of the
  * corresponding app/Events/*.php classes at the time of writing.
  */
+import { shouldForwardToHost, packHit } from './ide-bridge-internal.js';
+
 function currentUserId() {
     const meta = document.querySelector('meta[name="aiorg-user-id"]');
     return meta ? Number(meta.getAttribute('content')) : null;
 }
 
 function postToHost(message) {
+    if (!shouldForwardToHost(message, typeof acquireVsCodeApi === 'function', window.parent !== window)) {
+        return;
+    }
     if (typeof acquireVsCodeApi === 'function') {
         const api = (window.__aiorgVscodeApi ??= acquireVsCodeApi());
         api.postMessage(message);
@@ -40,17 +45,10 @@ function start() {
     }
 
     channel.listen('.HitDealt', (p) => {
-        if (me === null || Number(p.user_id) !== me) {
-            return;
+        const out = packHit(p, currentUserId());
+        if (out) {
+            postToHost(out);
         }
-        postToHost({
-            type: 'hit-landed',
-            userId: Number(p.user_id),
-            damage: Number(p.damage),
-            bossId: Number(p.boss_id),
-            bossHpAfter: Number(p.boss_hp_after),
-            bossMaxHp: Number(p.boss_max_hp),
-        });
     });
 
     channel.listen('.BossKilled', (p) => {
