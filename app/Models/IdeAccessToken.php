@@ -63,6 +63,7 @@ class IdeAccessToken extends Model
         }
 
         return self::query()
+            ->where('kind', 'one_time')
             ->where('token_hash', $tokenHash)
             ->first()
             ?->user;
@@ -138,6 +139,7 @@ class IdeAccessToken extends Model
         }
 
         $token = self::query()
+            ->where('kind', 'session_url')
             ->where('token_hash', $tokenHash)
             ->first();
 

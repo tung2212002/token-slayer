@@ -12,7 +12,7 @@ Route::post('/events', [EventController::class, 'store'])
 
 Route::get('/state', [StateController::class, 'show']);
 
-Route::prefix('ide')->group(function (): void {
+Route::middleware('throttle:30,1')->prefix('ide')->group(function (): void {
     Route::post('/auth/exchange', [AuthController::class, 'exchange']);
 
     Route::middleware('ide.bearer')->group(function (): void {

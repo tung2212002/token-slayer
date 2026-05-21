@@ -1,13 +1,11 @@
 import * as vscode from 'vscode';
 import type { AuthService } from '../auth/AuthService';
 import type { BattlefieldPanel } from '../webview/BattlefieldPanel';
-import type { AiorgClient } from '../api/AiorgClient';
 
 export function registerStatusBarItem(
   context: vscode.ExtensionContext,
   auth: AuthService,
   panel: BattlefieldPanel,
-  _client: AiorgClient,
 ): void {
   const item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
   item.command = 'aiorg.openBattlefield';

@@ -52,6 +52,7 @@ export function iframeWrapperHtml(nonce: string, signedUrl: string, serverOrigin
     const api = acquireVsCodeApi();
     window.addEventListener('message', (event) => {
       if (event.source !== document.getElementById('aiorg').contentWindow) return;
+      if (event.origin !== '${serverOrigin}') return;
       api.postMessage(event.data);
     });
   </script>

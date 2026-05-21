@@ -26,3 +26,11 @@ test('battlefield with embed=ide hides chrome and includes the bridge script', f
     expect($response->getContent())->toContain('data-ide-embed="true"');
     expect($response->getContent())->toContain('ide-bridge');
 });
+
+test('battlefield with embed=ide does NOT include bridge script for guests', function () {
+    $response = $this->get('/battlefield?embed=ide')->assertOk();
+
+    expect($response->getContent())
+        ->toContain('data-ide-embed="true"')
+        ->not->toContain('ide-bridge');
+});

@@ -52,7 +52,7 @@ export function activate(context: vscode.ExtensionContext): void {
   registerOpenBattlefield(context);
   registerInstallHooks(context, client);
   registerUninstallHooks(context, client);
-  registerStatusBarItem(context, auth, panel, client);
+  registerStatusBarItem(context, auth, panel);
   registerNotifications(context, panel);
 }
 

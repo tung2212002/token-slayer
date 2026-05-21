@@ -56,3 +56,12 @@ test('revoke invalidates a bearer', function () {
 
     expect(IdeAccessToken::resolveBearer($plain))->toBeNull();
 });
+
+test('rate-limits /api/ide/auth/exchange', function () {
+    for ($i = 0; $i < 30; $i++) {
+        $this->postJson('/api/ide/auth/exchange', ['token' => 'x', 'state' => 'y']);
+    }
+
+    $this->postJson('/api/ide/auth/exchange', ['token' => 'x', 'state' => 'y'])
+        ->assertStatus(429);
+});
