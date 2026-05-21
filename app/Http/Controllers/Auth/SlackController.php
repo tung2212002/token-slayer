@@ -3,16 +3,22 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Models\IdeAccessToken;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Laravel\Socialite\Facades\Socialite;
 use Symfony\Component\HttpFoundation\RedirectResponse as SymfonyRedirectResponse;
 
 class SlackController extends Controller
 {
-    public function redirect(): SymfonyRedirectResponse
+    public function redirect(Request $request): SymfonyRedirectResponse
     {
+        if ($request->query('return') === 'ide' && is_string($state = $request->query('state'))) {
+            session()->put('ide_oauth', ['state' => $state]);
+        }
+
         return Socialite::driver('slack')->redirect();
     }
 
@@ -38,6 +44,10 @@ class SlackController extends Controller
             session()->put('hook_token_plain', $plainToken);
             auth()->login($user);
 
+            if ($ide = $this->consumeIdeFlow()) {
+                return $this->redirectToIde($user, $ide['state']);
+            }
+
             return redirect()->route('profile');
         }
 
@@ -51,6 +61,36 @@ class SlackController extends Controller
 
         auth()->login($user);
 
+        if ($ide = $this->consumeIdeFlow()) {
+            return $this->redirectToIde($user, $ide['state']);
+        }
+
         return redirect()->route('battlefield');
+    }
+
+    /**
+     * @return array{state: string}|null
+     */
+    private function consumeIdeFlow(): ?array
+    {
+        $ide = session()->pull('ide_oauth');
+
+        if (! is_array($ide) || ! isset($ide['state']) || ! is_string($ide['state'])) {
+            return null;
+        }
+
+        return ['state' => $ide['state']];
+    }
+
+    private function redirectToIde(User $user, string $state): RedirectResponse
+    {
+        [$plain] = IdeAccessToken::issueOneTime($user, $state, 120);
+
+        $url = 'vscode://aiorg.aiorg/auth?'.http_build_query([
+            'token' => $plain,
+            'state' => $state,
+        ]);
+
+        return redirect()->away($url);
     }
 }
