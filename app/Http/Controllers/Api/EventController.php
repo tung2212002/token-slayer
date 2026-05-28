@@ -37,7 +37,7 @@ class EventController extends Controller
 
         $user->forceFill(['last_event_at' => now()])->save();
 
-        if ($eventType === 'user-prompt-submit') {
+        if ($eventType === 'user-prompt-submit' || $eventType === 'pre-invocation') {
             $this->chargingCache->put($user->id, 'thinking…');
             $this->dispatchSafely(new FighterCharging($user, 'thinking…'));
         }
@@ -104,8 +104,12 @@ class EventController extends Controller
 
         $detail = match ($tool) {
             'Bash' => '$ '.(string) ($input['command'] ?? ''),
+            'run_command' => '$ '.(string) ($input['CommandLine'] ?? ''),
             'Read', 'Edit', 'Write', 'NotebookEdit' => $tool.': '.basename((string) ($input['file_path'] ?? '')),
+            'read_file', 'view_file' => $tool.': '.basename((string) ($input['AbsolutePath'] ?? '')),
+            'write_file', 'write_to_file', 'replace_file_content', 'multi_replace_file_content' => $tool.': '.basename((string) ($input['TargetFile'] ?? ($input['AbsolutePath'] ?? ''))),
             'Grep' => 'Grep: '.(string) ($input['pattern'] ?? ''),
+            'grep_search' => 'Grep: '.(string) ($input['Query'] ?? ''),
             'Glob' => 'Glob: '.(string) ($input['pattern'] ?? ''),
             'WebFetch' => 'WebFetch: '.(string) ($input['url'] ?? ''),
             'TodoWrite' => 'TodoWrite',
@@ -135,7 +139,7 @@ class EventController extends Controller
             return $inline;
         }
 
-        $path = $payload['transcript_path'] ?? null;
+        $path = $payload['transcript_path'] ?? $payload['transcriptPath'] ?? null;
         if (! is_string($path)) {
             return 0;
         }
