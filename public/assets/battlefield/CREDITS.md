@@ -6,6 +6,17 @@ Pixel art from **Warped: Super Grotto Escape Collection** by **Ansimuz**.
 - License: **CC0 1.0 Universal** (public domain)
 - Mirror used for download: https://github.com/thanhnld0912/Super-Grotto-Escape
 
+Fighter character sprites from **Game Art 2D freebies** (License: **CC0 1.0 Universal**):
+
+- The Knight: https://www.gameart2d.com/the-knight-free-sprites.html
+- Red Hat Boy: https://www.gameart2d.com/red-hat-boy-free-sprites.html
+- Ninja Girl: https://www.gameart2d.com/ninja-girl---free-sprites.html
+- Adventurer Girl: https://www.gameart2d.com/adventurer-girl---free-sprites.html
+- Ninja Adventure (shinobi): https://www.gameart2d.com/ninja-adventure---free-sprites.html
+
+The `shadow.png` and `gnu.png` bosses are CC0 sprite sheets whose source
+pages were not recorded at download time.
+
 ## Files
 
 ### Boss spritesheets (`bosses/`)
@@ -17,6 +28,20 @@ Pixel art from **Warped: Super Grotto Escape Collection** by **Ansimuz**.
 | `skeleton.png` | 128×32 | 4 | 32×32 |
 | `slime.png` | 160×32 | 5 | 32×32 |
 | `mini-demon.png` | 192×48 | 4 | 48×48 |
+| `shadow.png` | 320×350 | 4 used (idle) | 80×70 |
+| `gnu.png` | 600×400 | 5 used (idle) | 120×100 |
+
+### Fighter spritesheets (`fighters/`)
+
+Idle/run sheet pairs, all 256px-tall frames:
+
+| Character | Files | Idle frame | Run frame | Frames (idle/run) |
+|---|---|---|---|---|
+| knight | `knight-idle.png`, `knight-run.png` | 212×256 | 212×256 | 10 / 10 |
+| redhat | `redhat-idle.png`, `redhat-run.png` | 300×256 | 300×256 | 10 / 8 |
+| ninjagirl | `ninjagirl-idle.png`, `ninjagirl-run.png` | 148×256 | 185×256 | 10 / 10 |
+| adventurer | `adventurer-idle.png`, `adventurer-run.png` | 302×256 | 302×256 | 10 / 8 |
+| shinobi | `ninja-idle.png`, `ninja-run.png` | 135×256 | 202×256 | 10 / 10 |
 
 ### FX (`fx/`)
 

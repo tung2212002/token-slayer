@@ -1,8 +1,8 @@
 import Phaser from 'phaser';
-import { BG_COLOR, LAYOUTS, TIMINGS } from './config.js';
-import { computeFighterPositions, fighterDisplayConfig } from './layout.js';
+import { BG_COLOR, LAYOUTS, TIMINGS, BOSS_TYPES, FIGHTER_TYPES } from './config.js';
+import { chargeFootY, computeFighterPositions, damageScaleMultiplier, fighterDisplayConfig } from './layout.js';
 import { bus } from './bus.js';
-import { spawnProjectile } from './projectile.js';
+import { ATTACK_HANDLERS } from './attacks.js';
 import { applyImpact } from './impact.js';
 import { createLeaderboard, showMvpCard } from './leaderboard.js';
 import { formatHp } from './format.js';
@@ -23,24 +23,29 @@ function truncateHandle(handle) {
   return handle.slice(0, HANDLE_MAX_CHARS - 1) + '…';
 }
 
+function chargeParticleColors(ftype) {
+  if (ftype?.key === 'shinobi') {
+    return [0x4c1d95, 0x7c3aed, 0xa855f7, 0xc4b5fd, 0x8b5cf6];
+  }
+  return [0x991100, 0xcc3300, 0xdd6600, 0xee9900, 0xffbb00];
+}
+
 export class BattlefieldScene extends Phaser.Scene {
   constructor() {
     super('battlefield');
   }
 
   preload() {
-    this.load.spritesheet('boss-ghost', '/assets/battlefield/bosses/ghost.png', {
-      frameWidth: 32,
-      frameHeight: 32,
-    });
-    this.load.spritesheet('boss-skeleton', '/assets/battlefield/bosses/skeleton.png', {
-      frameWidth: 32,
-      frameHeight: 32,
-    });
-    this.load.spritesheet('boss-slime', '/assets/battlefield/bosses/slime.png', {
-      frameWidth: 32,
-      frameHeight: 32,
-    });
+    for (const ft of FIGHTER_TYPES) {
+      this.load.spritesheet(ft.key + '-idle', ft.idleFile, { frameWidth: ft.frameWidth, frameHeight: ft.frameHeight });
+      this.load.spritesheet(ft.key + '-run',  ft.runFile,  { frameWidth: ft.runFrameWidth ?? ft.frameWidth, frameHeight: ft.frameHeight });
+    }
+    for (const boss of BOSS_TYPES) {
+      this.load.spritesheet(boss.key, boss.file, {
+        frameWidth: boss.frameWidth,
+        frameHeight: boss.frameHeight,
+      });
+    }
     this.load.spritesheet('fireball', '/assets/battlefield/fx/fireball.png', {
       frameWidth: 16,
       frameHeight: 16,
@@ -49,19 +54,49 @@ export class BattlefieldScene extends Phaser.Scene {
       frameWidth: 32,
       frameHeight: 32,
     });
+    this.load.on('complete', () => {
+      const pixelArtKeys = [...BOSS_TYPES.filter(b => b.pixelArt !== false).map(b => b.key), 'fireball', 'explosion'];
+      for (const key of pixelArtKeys) {
+        this.textures.get(key).setFilter(Phaser.Textures.FilterMode.NEAREST);
+      }
+      for (const ft of FIGHTER_TYPES) {
+        this.textures.get(ft.key + '-idle').setFilter(Phaser.Textures.FilterMode.NEAREST);
+        this.textures.get(ft.key + '-run').setFilter(Phaser.Textures.FilterMode.NEAREST);
+        if (!this.anims.exists(ft.key + '-idle')) {
+          this.anims.create({
+            key: ft.key + '-idle',
+            frames: this.anims.generateFrameNumbers(ft.key + '-idle', { start: 0, end: ft.idleFrames - 1 }),
+            frameRate: 8,
+            repeat: -1,
+          });
+        }
+        if (!this.anims.exists(ft.key + '-run')) {
+          this.anims.create({
+            key: ft.key + '-run',
+            frames: this.anims.generateFrameNumbers(ft.key + '-run', { start: 0, end: ft.runFrames - 1 }),
+            frameRate: 10,
+            repeat: -1,
+          });
+        }
+      }
+    });
+  }
+
+  bossTypeFor(number) {
+    return BOSS_TYPES[number % BOSS_TYPES.length];
   }
 
   bossTextureFor(number) {
-    const keys = ['boss-ghost', 'boss-skeleton', 'boss-slime'];
-    return keys[number % keys.length];
+    return this.bossTypeFor(number).key;
   }
 
   ensureBossIdleAnim(textureKey) {
     const animKey = `${textureKey}-idle`;
     if (!this.anims.exists(animKey)) {
+      const bossType = BOSS_TYPES.find(b => b.key === textureKey);
       this.anims.create({
         key: animKey,
-        frames: this.anims.generateFrameNumbers(textureKey, { start: 0, end: 3 }),
+        frames: this.anims.generateFrameNumbers(textureKey, { start: bossType?.idleStart ?? 0, end: bossType?.idleEnd ?? 3 }),
         frameRate: 6,
         repeat: -1,
       });
@@ -96,22 +131,23 @@ export class BattlefieldScene extends Phaser.Scene {
 
     this.add.rectangle(L.logicalWidth / 2, L.logicalHeight / 2, L.logicalWidth, L.logicalHeight, BG_COLOR);
 
-    this.makeChargeRingTexture();
+    this.makeSparkTexture();
 
     const state = this.game.registry.get('initialState');
     this.bossState = { ...state.boss };
 
-    const initialKey = this.bossTextureFor(state.boss.number);
+    const initialType = this.bossTypeFor(state.boss.number);
+    const initialKey = initialType.key;
     const initialAnim = this.ensureBossIdleAnim(initialKey);
     this.bossSprite = this.add
       .sprite(L.boss.anchor.x, L.boss.anchor.y, initialKey)
-      .setScale(L.boss.scale)
+      .setScale(initialType.scale)
       .play(initialAnim);
     this.startBossPatrol();
 
     this.bossNameText = this.addSharpText(L.boss.name.x, L.boss.name.y, this.bossLabel(state.boss), {
       fontFamily: 'monospace',
-      fontSize: '14px',
+      fontSize: '28px',
       color: '#ffffff',
     });
 
@@ -135,15 +171,16 @@ export class BattlefieldScene extends Phaser.Scene {
       .setFillStyle()
       .setStrokeStyle(1, 0x94a3b8, 1);
 
-    this.hpText = this.addSharpText(L.hpBar.x, L.hpBar.y + 12, `${formatHp(state.boss.currentHp)} / ${formatHp(state.boss.maxHp)}`, {
+    this.hpText = this.addSharpText(L.hpBar.x, L.hpBar.y + 24, `${formatHp(state.boss.currentHp)} / ${formatHp(state.boss.maxHp)}`, {
       fontFamily: 'monospace',
-      fontSize: '11px',
+      fontSize: '22px',
       color: '#ffffff',
       stroke: '#0f172a',
-      strokeThickness: 3,
+      strokeThickness: 6,
     }, 3);
 
     this.fighters = new Map();
+    this.damageTotals = new Map();
     const config = fighterDisplayConfig(state.fighters.length, this.mode);
     const positions = computeFighterPositions(
       state.fighters.length,
@@ -153,6 +190,12 @@ export class BattlefieldScene extends Phaser.Scene {
       config.rowSpacing,
     );
     state.fighters.forEach((f, i) => this.addFighter(f, positions[i], config));
+
+    // Restore damage-based fighter sizes captured by snapshotState on reboot
+    for (const [userId, damage] of state.damageTotals ?? []) {
+      this.damageTotals.set(userId, damage);
+      this.rescaleFighterByDamage(userId);
+    }
 
     this.leaderboard = createLeaderboard(this);
     this.leaderboard.seed(state.leaderboard ?? []);
@@ -209,14 +252,15 @@ export class BattlefieldScene extends Phaser.Scene {
     return text;
   }
 
-  makeChargeRingTexture() {
-    if (this.textures.exists('charge-ring')) {
+  makeSparkTexture() {
+    if (this.textures.exists('spark')) {
       return;
     }
-    const g = this.make.graphics({ x: 0, y: 0, add: false });
-    g.lineStyle(2, 0x22d3ee, 1);
-    g.strokeCircle(16, 16, 15);
-    g.generateTexture('charge-ring', 32, 32);
+    const g = this.make.graphics({ add: false });
+    g.fillStyle(0xffffff, 1);
+    // Thin triangle — tip at right (24,3), base at left
+    g.fillTriangle(24, 3, 0, 0, 0, 6);
+    g.generateTexture('spark', 24, 6);
     g.destroy();
   }
 
@@ -226,11 +270,67 @@ export class BattlefieldScene extends Phaser.Scene {
     }
     this.clearCharge(payload.user_id);
     const fighter = this.fighters.get(payload.user_id);
-    const fromX = fighter ? fighter.pos.x : this.layout.logicalWidth / 2;
-    const fromY = fighter ? fighter.pos.y : this.layout.logicalHeight / 2;
-    spawnProjectile(this, fromX, fromY, () => {
+    const isKillShot = (payload.boss_hp_after ?? 1) <= 0;
+    if (payload.damage > 0 && fighter) {
+      const prev = this.damageTotals.get(payload.user_id) ?? 0;
+      this.damageTotals.set(payload.user_id, prev + payload.damage);
+      // Update the canonical rest scale now so the attack animation about to
+      // run settles onto it; the visual grow tween itself stays delayed.
+      fighter.damageScale = damageScaleMultiplier(prev + payload.damage, this.bossState?.maxHp);
+      this.time.delayedCall(isKillShot ? 720 : 120, () => {
+        this.rescaleFighterByDamage(payload.user_id);
+      });
+    }
+    const onImpact = () => {
       this.leaderboard?.onHit(payload.user_id, payload.damage, payload.slack_handle);
       applyImpact(this, payload.boss_hp_after);
+    };
+    if (fighter) {
+      const attackType = fighter.ftype?.attackType ?? 'blast';
+      const handler = ATTACK_HANDLERS[attackType] ?? ATTACK_HANDLERS.blast;
+      handler(this, fighter, {
+        isKillShot,
+        damage: payload.damage,
+        maxHp: this.bossState?.maxHp ?? 1,
+        onImpact,
+      });
+    } else {
+      this.time.delayedCall(TIMINGS.projectileArcMs, onImpact);
+    }
+  }
+
+  rescaleFighterByDamage(userId) {
+    const fighter = this.fighters.get(userId);
+    if (!fighter) return;
+    fighter.damageScale = damageScaleMultiplier(this.damageTotals.get(userId) ?? 0, this.bossState?.maxHp);
+    this.tweenToRestScale(fighter);
+  }
+
+  fighterRestScale(fighter) {
+    return (fighter.displaySize / fighter.baseSize) * (fighter.damageScale ?? 1);
+  }
+
+  /**
+   * Tween the fighter toward its canonical rest scale without killing other
+   * tweens. If an attack animation currently owns the sprite's scale, skip —
+   * the attack's own return tween reads fighterRestScale() and settles there.
+   */
+  tweenToRestScale(fighter, { duration = 600, ease = 'Back.easeOut' } = {}) {
+    fighter.rescaleTween?.remove();
+    fighter.rescaleTween = null;
+    const attackOwnsScale = this.tweens.getTweensOf(fighter.sprite)
+      .some(tw => tw.data?.some(d => d.key === 'scaleX' || d.key === 'scaleY'));
+    if (attackOwnsScale) {
+      return;
+    }
+    const target = this.fighterRestScale(fighter);
+    fighter.rescaleTween = this.tweens.add({
+      targets: fighter.sprite,
+      scaleX: target,
+      scaleY: target,
+      duration,
+      ease,
+      onComplete: () => { fighter.rescaleTween = null; },
     });
   }
 
@@ -249,11 +349,12 @@ export class BattlefieldScene extends Phaser.Scene {
       onComplete: () => oldSprite.destroy(),
     });
 
-    const textureKey = this.bossTextureFor(payload.boss_number);
+    const bossType = this.bossTypeFor(payload.boss_number);
+    const textureKey = bossType.key;
     const animKey = this.ensureBossIdleAnim(textureKey);
     this.bossSprite = this.add
       .sprite(L.boss.anchor.x, -40, textureKey)
-      .setScale(L.boss.scale)
+      .setScale(bossType.scale)
       .play(animKey);
     this.tweens.add({
       targets: this.bossSprite,
@@ -273,6 +374,12 @@ export class BattlefieldScene extends Phaser.Scene {
     this.hpBarFill.width = L.hpBar.width;
     this.hpText.setText(`${formatHp(payload.max_hp)} / ${formatHp(payload.max_hp)}`);
     this.leaderboard?.reset();
+    // Reset damage totals and fighter sizes for new boss
+    this.damageTotals.clear();
+    for (const [, f] of this.fighters.entries()) {
+      f.damageScale = 1;
+      this.tweenToRestScale(f, { duration: 400, ease: 'Quad.easeOut' });
+    }
   }
 
   handleBossKilled(payload = {}) {
@@ -316,29 +423,50 @@ export class BattlefieldScene extends Phaser.Scene {
       }
       return;
     }
-    const ringSize = fighter.displaySize + 8;
-    const ring = this.add
-      .image(fighter.pos.x, fighter.pos.y, 'charge-ring')
-      .setBlendMode(Phaser.BlendModes.ADD)
-      .setAlpha(0.4)
-      .setDisplaySize(ringSize, ringSize);
-    const pulse = this.tweens.add({
-      targets: ring,
-      alpha: 0.9,
-      duration: TIMINGS.chargeRingPulseMs / 2,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut',
+    // Switch to run animation while charging
+    if (fighter.body) {
+      fighter.body.setTexture(fighter.ftype.key + '-run');
+      fighter.body.play(fighter.ftype.key + '-run');
+      fighter.body.setFlipX(
+        (fighter.pos.x > this.layout.boss.anchor.x) !== (fighter.ftype?.baseFlipX ?? false),
+      );
+    }
+    const footY   = chargeFootY(fighter.pos.y, fighter.displaySize);
+    const fireColors = chargeParticleColors(fighter.ftype);
+    const runRight   = fighter.pos.x <= this.layout.boss.anchor.x;
+    const trailX     = runRight ? -1 : 1;
+    const backX      = fighter.pos.x + trailX * fighter.displaySize * 0.25;
+    const sxMin      = trailX > 0 ? 40  : -170;
+    const sxMax      = trailX > 0 ? 170 : -40;
+    const baseAngle  = runRight ? 228 : 312;
+    const ps         = fighter.displaySize * 0.018; // scale tỉ lệ với displaySize
+    const emitter = this.add.particles(backX, footY, 'spark', {
+      tint: { onEmit: () => Phaser.Math.RND.pick(fireColors) },
+      rotate: { min: baseAngle - 18, max: baseAngle + 18 },
+      scale: { start: ps, end: 0 },
+      alpha: { start: 0.5, end: 0 },
+      speedX: { min: sxMin, max: sxMax },
+      speedY: { min: -320, max: -100 },
+      lifespan: { min: 300, max: 550 },
+      frequency: 20,
+      quantity: 3,
+      gravityY: 90,
+      blendMode: Phaser.BlendModes.ADD,
     });
-    const breath = this.tweens.add({
-      targets: fighter.sprite,
-      scaleY: fighter.sprite.scaleY * 1.05,
-      duration: TIMINGS.chargeRingPulseMs / 2,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut',
+    const embers = this.add.particles(backX, footY, 'spark', {
+      tint: { onEmit: () => Phaser.Math.RND.pick(fireColors) },
+      rotate: { min: baseAngle - 30, max: baseAngle + 30 },
+      scale: { start: ps * 0.55, end: 0 },
+      alpha: { start: 0.4, end: 0 },
+      speedX: { min: Math.round(sxMin * 1.3), max: Math.round(sxMax * 1.3) },
+      speedY: { min: -260, max: -70 },
+      lifespan: { min: 280, max: 520 },
+      frequency: 25,
+      quantity: 2,
+      gravityY: 70,
+      blendMode: Phaser.BlendModes.ADD,
     });
-    const entry = { ring, pulse, breath, bubble: null, activity: payload.activity ?? '' };
+    const entry = { emitter, embers, bubble: null, activity: payload.activity ?? '' };
     if (this.fightersAllowBubbles()) {
       this.updateActivityBubble(entry, fighter, payload.activity);
     }
@@ -361,16 +489,16 @@ export class BattlefieldScene extends Phaser.Scene {
       entry.bubble.setActivity(activity);
       return;
     }
-    const bubbleY = fighter.pos.y - (fighter.displaySize / 2 + 14);
+    const bubbleY = fighter.pos.y - (fighter.displaySize / 2 + 28);
     entry.bubble = this.createActivityBubble(fighter.pos.x, bubbleY, activity);
   }
 
   createActivityBubble(x, y, activity) {
     const text = this.addSharpText(x, y, truncateActivity(activity), {
       fontFamily: 'monospace',
-      fontSize: '7px',
+      fontSize: '14px',
       color: '#f1f5f9',
-      padding: { left: 4, right: 4, top: 2, bottom: 2 },
+      padding: { left: 8, right: 8, top: 4, bottom: 4 },
     });
     const bg = this.add
       .rectangle(x, y, text.width + 8, text.height + 4, 0x1e293b, 0.92)
@@ -408,19 +536,25 @@ export class BattlefieldScene extends Phaser.Scene {
     if (!entry) {
       return;
     }
-    entry.pulse.stop();
-    entry.breath.stop();
+    entry.emitter.stop();
+    entry.embers?.stop();
+    this.time.delayedCall(900, () => {
+      if (entry.emitter?.scene) entry.emitter.destroy();
+      if (entry.embers?.scene) entry.embers.destroy();
+    });
     if (entry.bubble) {
       entry.bubble.destroy();
       entry.bubble = null;
     }
-    this.tweens.add({
-      targets: entry.ring,
-      alpha: 0,
-      duration: 200,
-      onComplete: () => entry.ring.destroy(),
-    });
     this.charges.delete(userId);
+    // Switch back to idle animation
+    const fighter = this.fighters.get(userId);
+    if (fighter?.body) {
+      fighter.body.setTexture(fighter.ftype.key + '-idle');
+      fighter.body.play(fighter.ftype.key + '-idle');
+      fighter.body.setFlipX(fighter.ftype.baseFlipX ?? false);
+      fighter.sprite.scaleY = fighter.sprite.scaleX;
+    }
   }
 
   clearAllCharges() {
@@ -458,23 +592,16 @@ export class BattlefieldScene extends Phaser.Scene {
       });
 
       if (sizeChanged) {
-        entry.sprite.setDisplaySize(newSize, newSize);
-        if (entry.maskShape) {
-          entry.maskShape.destroy();
-        }
-        const radius = newSize / 2;
-        const maskShape = this.make.graphics({ x: target.x, y: target.y, add: false });
-        maskShape.fillCircle(0, 0, radius);
-        entry.sprite.setMask(maskShape.createGeometryMask());
-        entry.maskShape = maskShape;
         entry.displaySize = newSize;
+        entry.sprite.setScale(this.fighterRestScale(entry));
       }
 
-      const handleY = target.y + (newSize / 2) + 9;
+      const scale = entry.sprite.scaleX;
+      const handleY = target.y + entry.legH * scale + 14;
       if (config.showHandle && !entry.handle) {
         entry.handle = this.addSharpText(target.x, handleY, truncateHandle(entry.handleText), {
           fontFamily: 'monospace',
-          fontSize: '8px',
+          fontSize: '16px',
           color: '#fbbf24',
         });
       } else if (!config.showHandle && entry.handle) {
@@ -494,17 +621,11 @@ export class BattlefieldScene extends Phaser.Scene {
 
       const charge = this.charges.get(userId);
       if (charge) {
-        const ringSize = newSize + 8;
-        this.tweens.add({
-          targets: charge.ring,
-          x: target.x,
-          y: target.y,
-          duration: 200,
-          ease: 'Quad.easeOut',
-        });
-        charge.ring.setDisplaySize(ringSize, ringSize);
+        const newFootY = chargeFootY(target.y, newSize);
+        charge.emitter.setPosition(target.x, newFootY);
+        charge.embers?.setPosition(target.x, newFootY);
         if (charge.bubble) {
-          charge.bubble.moveTo(target.x, target.y - (newSize / 2 + 14));
+          charge.bubble.moveTo(target.x, target.y - (newSize / 2 + 28));
         }
       }
     }
@@ -530,7 +651,17 @@ export class BattlefieldScene extends Phaser.Scene {
           resolve(key);
           return;
         }
-        this.textures.addImage(key, img);
+        // Bake a circular crop into the texture using canvas 2D
+        const size = 128;
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        ctx.beginPath();
+        ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
+        ctx.clip();
+        ctx.drawImage(img, 0, 0, size, size);
+        this.textures.addCanvas(key, canvas);
         this.textures.get(key).setFilter(Phaser.Textures.FilterMode.LINEAR);
         resolve(key);
       };
@@ -544,7 +675,7 @@ export class BattlefieldScene extends Phaser.Scene {
     if (this.textures.exists(key)) {
       return key;
     }
-    const size = 64;
+    const size = 128;
     const radius = size / 2;
     const palette = [0x6366f1, 0x10b981, 0xf59e0b, 0xec4899, 0x14b8a6, 0xf97316, 0x8b5cf6, 0x0ea5e9];
     const color = palette[Math.abs(Number(fighter.id) || 0) % palette.length];
@@ -557,7 +688,7 @@ export class BattlefieldScene extends Phaser.Scene {
     rt.draw(circle, 0, 0);
     const label = this.add.text(0, 0, initial, {
       fontFamily: 'monospace',
-      fontSize: '36px',
+      fontSize: '72px',
       color: '#ffffff',
     }).setOrigin(0.5).setVisible(false);
     rt.draw(label, radius, radius);
@@ -580,7 +711,8 @@ export class BattlefieldScene extends Phaser.Scene {
     const fighter = {
       id: payload.user_id,
       handle: payload.slack_handle,
-      avatarUrl: payload.avatar_url,
+      avatarUrl: payload.user_id ? `/avatars/${payload.user_id}` : null,
+      character: payload.character ?? null,
     };
 
     const count = this.fighters.size + 1;
@@ -612,38 +744,61 @@ export class BattlefieldScene extends Phaser.Scene {
   }
 
   addFighter(fighter, pos, options = {}) {
+    const size = options.displaySize ?? 48;
+
+    // Pick character type by fighter.character key, fall back to id modulo
+    const ftypeKey = fighter.character ?? null;
+    const ftype = (ftypeKey && FIGHTER_TYPES.find(ft => ft.key === ftypeKey))
+      ?? FIGHTER_TYPES[Math.abs(Number(fighter.id) || 0) % FIGHTER_TYPES.length];
+    const scale = size / ftype.frameHeight;
+    const legH  = Math.round(ftype.frameHeight * 0.35 * scale);
+
+    const container = this.add.container(pos.x, pos.y);
+
+    // Body sprite — starts in idle animation (waiting state)
+    const body = this.add.sprite(0, 0, ftype.key + '-idle').setScale(scale);
+    body.play(ftype.key + '-idle');
+    if (ftype.baseFlipX) body.setFlipX(true);
+    container.add(body);
+
+    // Avatar overlay on face area (circular pre-baked texture)
+    const avatarSize = Math.round(ftype.headSize * scale);
+    const headOffsetX = Math.round(ftype.headX * scale);
+    const headOffsetY = Math.round(ftype.headY * scale);
     const initialKey = this.textures.exists(`fighter-${fighter.id}`)
       ? `fighter-${fighter.id}`
       : this.makeFallbackAvatarTexture(fighter);
-    const size = options.displaySize ?? 24;
-    const radius = size / 2;
-    const sprite = this.add.image(pos.x, pos.y, initialKey).setDisplaySize(size, size);
-    const maskShape = this.make.graphics({ x: pos.x, y: pos.y, add: false });
-    maskShape.fillCircle(0, 0, radius);
-    sprite.setMask(maskShape.createGeometryMask());
+    const head = this.add.image(headOffsetX, headOffsetY, initialKey).setDisplaySize(avatarSize, avatarSize);
+    container.add(head);
+
+    // Handle label (world-space)
     const handle = options.showHandle === false
       ? null
-      : this.addSharpText(pos.x, pos.y + radius + 9, truncateHandle(fighter.handle), {
-        fontFamily: 'monospace',
-        fontSize: '8px',
-        color: '#fbbf24',
-      });
+      : this.addSharpText(pos.x, pos.y + legH + 14, truncateHandle(fighter.handle), {
+          fontFamily: 'monospace',
+          fontSize: '16px',
+          color: '#fbbf24',
+        });
+
     this.fighters.set(fighter.id, {
       id: fighter.id,
       avatarUrl: fighter.avatarUrl ?? null,
-      sprite,
+      sprite: container,
+      body,
+      head,
       handle,
       handleText: fighter.handle ?? '',
       pos,
-      maskShape,
+      baseSize: size,
       displaySize: size,
+      legH,
+      ftype,
+      damageScale: 1,
     });
 
     if (initialKey !== `fighter-${fighter.id}`) {
       this.loadAvatarTexture(fighter).then(realKey => {
-        if (sprite.scene) {
-          sprite.setTexture(realKey).setDisplaySize(size, size);
-        }
+        if (head.scene) head.setTexture(realKey).setDisplaySize(avatarSize, avatarSize);
       }).catch(e => console.warn('[battlefield]', e.message));
     }
   }

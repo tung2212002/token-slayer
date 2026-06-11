@@ -17,6 +17,19 @@ export function computeFighterPositions(count, [minX, maxX], topY, perRow = 14, 
   return positions;
 }
 
+// Up to +40% bigger for the top contributor
+export function damageScaleMultiplier(damage, maxHp) {
+  if (!maxHp) {
+    return 1;
+  }
+  return 1 + Math.min(damage / maxHp, 1) * 0.4;
+}
+
+// Foot anchor for the charge particle emitters (≈ 0.35 leg height × 0.6)
+export function chargeFootY(posY, displaySize) {
+  return posY + Math.round(displaySize * 0.21);
+}
+
 export function rowsNeeded(count, perRow = 14) {
   return Math.max(1, Math.ceil(count / perRow));
 }
@@ -24,15 +37,15 @@ export function rowsNeeded(count, perRow = 14) {
 export function fighterDisplayConfig(count, mode = 'landscape') {
   if (mode === 'portrait') {
     if (count <= 8) {
-      return { displaySize: 28, topY: 290, rowSpacing: 32, showHandle: true, perRow: 8 };
+      return { displaySize: 80, topY: 580, rowSpacing: 90, showHandle: true, perRow: 8 };
     }
-    return { displaySize: 22, topY: 290, rowSpacing: 34, showHandle: false, perRow: 8 };
+    return { displaySize: 64, topY: 580, rowSpacing: 80, showHandle: false, perRow: 8 };
   }
   if (count <= 14) {
-    return { displaySize: 24, topY: 230, rowSpacing: 27, showHandle: true, perRow: 14 };
+    return { displaySize: 72, topY: 460, rowSpacing: 80, showHandle: true, perRow: 14 };
   }
   if (count <= 28) {
-    return { displaySize: 22, topY: 215, rowSpacing: 32, showHandle: false, perRow: 14 };
+    return { displaySize: 60, topY: 430, rowSpacing: 80, showHandle: false, perRow: 14 };
   }
-  return { displaySize: 18, topY: 195, rowSpacing: 28, showHandle: false, perRow: 14 };
+  return { displaySize: 48, topY: 390, rowSpacing: 72, showHandle: false, perRow: 14 };
 }

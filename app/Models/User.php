@@ -3,6 +3,7 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Enums\FighterCharacter;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -49,5 +50,10 @@ class User extends Authenticatable
     public function displayHandle(): string
     {
         return $this->slack_handle ?: ($this->name ?: '#'.$this->id);
+    }
+
+    public function characterForBoss(?int $bossId): string
+    {
+        return FighterCharacter::forUserAndBoss($this->id, $bossId)->value;
     }
 }

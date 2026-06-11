@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { BattlefieldScene } from './scene.js';
 import { LAYOUTS, BG_COLOR } from './config.js';
 import { bus } from './bus.js';
+import { snapshotState } from './snapshot.js';
 
 const ECHO_EVENT_MAP = {
   HitDealt: 'hit',
@@ -56,40 +57,6 @@ export function detectMode() {
   return window.innerWidth < window.innerHeight ? 'portrait' : 'landscape';
 }
 
-function snapshotState(currentState, scene) {
-  if (!scene) {
-    return currentState;
-  }
-  const next = { ...currentState };
-  if (scene.bossState) {
-    next.boss = {
-      number: scene.bossState.number,
-      name: scene.bossState.name,
-      currentHp: scene.bossState.currentHp,
-      maxHp: scene.bossState.maxHp,
-    };
-  }
-  if (scene.leaderboard) {
-    next.leaderboard = scene.leaderboard.getRanked().map(([userId, damage, handle]) => ({
-      userId,
-      damage,
-      handle,
-    }));
-  }
-  if (scene.fighters?.size > 0) {
-    next.fighters = [...scene.fighters.values()].map(f => {
-      const charge = scene.charges.get(f.id);
-      return {
-        id: f.id,
-        handle: f.handleText,
-        avatarUrl: f.avatarUrl,
-        charging: charge ? { activity: charge.activity ?? '' } : null,
-      };
-    });
-  }
-  return next;
-}
-
 function bootGame(mount, state, mode) {
   const layout = LAYOUTS[mode];
   const game = new Phaser.Game({
@@ -98,7 +65,8 @@ function bootGame(mount, state, mode) {
     width: layout.logicalWidth,
     height: layout.logicalHeight,
     backgroundColor: BG_COLOR,
-    pixelArt: true,
+    pixelArt: false,
+    antialias: true,
     scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
     scene: [BattlefieldScene],
   });
