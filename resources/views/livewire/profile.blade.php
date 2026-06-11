@@ -24,6 +24,16 @@
         <p class="text-xs text-gray-500 mt-2">Or inspect the script first: <a href="{{ $installUrl }}" class="underline">{{ $installUrl }}</a></p>
     </section>
 
+    <section class="border rounded p-4">
+        <h2 class="font-semibold mb-2">Track claude.ai &amp; Claude Desktop</h2>
+        <p class="text-sm text-gray-500 mb-2">Counts your claude.ai chats as boss damage (estimated from reply length). Claude Desktop chats sync to your account, so they're picked up too whenever claude.ai is open in this browser.</p>
+        <ol class="text-sm text-gray-500 list-decimal ml-5 space-y-1">
+            <li>Install <a href="https://www.tampermonkey.net/" target="_blank" rel="noopener" class="underline">Tampermonkey</a> (or Violentmonkey) in your browser.</li>
+            <li><a href="{{ $userscriptUrl }}" class="underline">Install the tracker userscript</a> — your userscript manager will prompt you.</li>
+            <li>Open <a href="https://claude.ai" target="_blank" rel="noopener" class="underline">claude.ai</a> — the script asks once for your hook token (the same token as above; regenerate if you don't have it saved).</li>
+        </ol>
+    </section>
+
     <details class="border rounded p-4">
         <summary class="font-semibold cursor-pointer">Manual hook config (if you'd rather copy by hand)</summary>
         <div class="mt-3 space-y-3">

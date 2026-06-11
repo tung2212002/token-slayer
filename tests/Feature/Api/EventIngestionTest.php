@@ -213,3 +213,19 @@ test('stop with zero tokens clears the cached charging entry', function () {
     $entry = app(FighterChargingCache::class)->many([$this->user->id])[$this->user->id];
     expect($entry)->toBeNull();
 });
+
+test('Stop event from the claude.ai tracker records the claude-ai provider and damages the boss', function () {
+    $this->withHeader('Authorization', 'Bearer tok')
+        ->postJson('/api/events?provider=claude-ai', [
+            'hook_event_name' => 'Stop',
+            'session_id' => 'conv-uuid-1',
+            'tokens' => 50_000,
+        ])
+        ->assertCreated();
+
+    expect(Event::sole())
+        ->provider->toBe('claude-ai')
+        ->tokens->toBe(50_000)
+        ->session_id->toBe('conv-uuid-1')
+        ->and(Boss::sole()->current_hp)->toBe(950_000);
+});

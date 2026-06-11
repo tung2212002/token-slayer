@@ -1,9 +1,10 @@
 # Token Slayer
 
 A cooperative idle boss raid for your team. Each AI token your coding agents
-spend (Claude Code, Codex, etc.) becomes damage against the current boss.
-Watch hits land in real time on the battlefield, defeat bosses together,
-and celebrate kills in Slack.
+spend (Claude Code, Codex, etc.) becomes damage against the current boss —
+and chats on claude.ai / Claude Desktop can count too via an optional
+browser userscript. Watch hits land in real time on the battlefield, defeat
+bosses together, and celebrate kills in Slack.
 
 ## How it works
 
@@ -66,6 +67,30 @@ composer run dev
    `~/.codex/config.toml`.
 6. Open `/battlefield` and watch your hits register as you work.
 
+## Tracking claude.ai & Claude Desktop (optional)
+
+Coding agents report exact token counts through hooks, but the claude.ai
+web app and Claude Desktop expose no usage data. The tracker userscript
+closes that gap with estimates:
+
+1. Install [Tampermonkey](https://www.tampermonkey.net/) (or Violentmonkey)
+   in your browser.
+2. Open `/profile` and click the userscript install link (served at
+   `/tracker.user.js`) — your userscript manager will prompt you.
+3. Open [claude.ai](https://claude.ai) and paste your hook token when the
+   script asks (once; it's stored in the userscript manager).
+
+The script estimates tokens from assistant reply length (~4 chars/token)
+and posts them as `provider=claude-ai` damage through the same `/api/events`
+pipeline as the hooks. Claude Desktop chats sync to your account, so they
+are picked up by the script's periodic poll whenever claude.ai is open in
+that browser. On first run it baselines your existing history without
+dealing damage, so installing won't nuke the boss.
+
+Caveats: counts are estimates (thinking tokens and system overhead are
+invisible), dedupe is per-browser, and the script reads claude.ai's
+undocumented internal endpoints, so it may need patching when those change.
+
 ## Pages
 
 | Path | Description |
@@ -73,7 +98,8 @@ composer run dev
 | `/` | Landing page. |
 | `/battlefield` | Live battle view. Public. |
 | `/history` | Defeated bosses. Public. |
-| `/profile` | Your hook token and agent snippets. Slack login required. |
+| `/profile` | Your hook token, agent snippets, and tracker install link. Slack login required. |
+| `/tracker.user.js` | The claude.ai tracker userscript. Public. |
 
 ## Testing
 

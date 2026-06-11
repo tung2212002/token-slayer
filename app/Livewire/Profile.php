@@ -39,6 +39,7 @@ class Profile extends Component
                 'namespace' => $namespace,
             ])->render(),
             'installUrl' => route('install-script'),
+            'userscriptUrl' => route('userscript'),
             'combinedCommand' => 'curl -fsSL '.route('install-script')." | {$envVar}={$tokenValue} sh",
             'tokenSaveCommand' => "mkdir -p ~/.config/{$namespace} && printf '%s' '{$tokenValue}' > {$tokenPath} && chmod 600 {$tokenPath}",
             'tokenPath' => $tokenPath,
