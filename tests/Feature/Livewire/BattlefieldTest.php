@@ -68,6 +68,14 @@ test('battlefield seeds leaderboard with per-fighter damage for the current boss
         ->assertSeeHtml('&quot;userId&quot;:'.$bob->id.',&quot;handle&quot;:&quot;bob&quot;,&quot;damage&quot;:500');
 });
 
+test('battlefield state assigns each fighter the character for the current boss', function () {
+    $boss = Boss::factory()->create();
+    $fighter = User::factory()->create(['last_event_at' => now()->subMinute()]);
+
+    Livewire::test(Battlefield::class)
+        ->assertSeeHtml('&quot;character&quot;:&quot;'.$fighter->characterForBoss($boss->id).'&quot;');
+});
+
 test('battlefield leaderboard payload is empty when no damage logged for the current boss', function () {
     Boss::factory()->create();
 

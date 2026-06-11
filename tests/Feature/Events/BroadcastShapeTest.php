@@ -46,3 +46,16 @@ test('every battlefield event broadcasts now on the battlefield channel with a s
             ->and($event->broadcastAs())->toBe($shortName);
     }
 });
+
+test('FighterJoined broadcasts the character assigned for the given boss', function () {
+    $user = User::factory()->create();
+    $boss = Boss::factory()->create();
+
+    $withBoss = new FighterJoined($user, $boss);
+    $withoutBoss = new FighterJoined($user);
+
+    expect($withBoss->broadcastWith())->toMatchArray([
+        'user_id' => $user->id,
+        'character' => $user->characterForBoss($boss->id),
+    ])->and($withoutBoss->broadcastWith()['character'])->toBe($user->characterForBoss(null));
+});
