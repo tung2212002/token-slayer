@@ -190,6 +190,7 @@ export class BattlefieldScene extends Phaser.Scene {
     this.add.rectangle(L.logicalWidth / 2, L.logicalHeight / 2, L.logicalWidth, L.logicalHeight, BG_COLOR);
 
     this.makeSparkTexture();
+    this.add.image(L.logicalWidth / 2, L.logicalHeight / 2, this.makeVignetteTexture());
 
     const state = this.game.registry.get('initialState');
     this.bossState = { ...state.boss };
@@ -208,6 +209,8 @@ export class BattlefieldScene extends Phaser.Scene {
       fontFamily: 'monospace',
       fontSize: '28px',
       color: '#ffffff',
+      stroke: '#0f172a',
+      strokeThickness: 8,
     }).setDepth(5);
 
     this.hpBarBg = this.add
@@ -220,7 +223,7 @@ export class BattlefieldScene extends Phaser.Scene {
         L.hpBar.y,
         Math.round(L.hpBar.width * (state.boss.currentHp / state.boss.maxHp)),
         L.hpBar.height,
-        0xef4444
+        this.hpBarColor(state.boss.currentHp, state.boss.maxHp)
       )
       .setOrigin(0, 0.5);
 
@@ -309,6 +312,31 @@ export class BattlefieldScene extends Phaser.Scene {
       return result;
     };
     return text;
+  }
+
+  hpBarColor(current, max) {
+    const pct = current / max;
+    if (pct > 0.5) return 0x22c55e;
+    if (pct > 0.25) return 0xf59e0b;
+    return 0xef4444;
+  }
+
+  makeVignetteTexture() {
+    const { logicalWidth: W, logicalHeight: H } = this.layout;
+    const key = `bf-vignette-${this.mode}`;
+    if (!this.textures.exists(key)) {
+      const canvas = document.createElement('canvas');
+      canvas.width = W;
+      canvas.height = H;
+      const ctx = canvas.getContext('2d');
+      const grad = ctx.createRadialGradient(W / 2, H / 2, H * 0.18, W / 2, H / 2, H * 0.88);
+      grad.addColorStop(0, 'rgba(0,0,0,0)');
+      grad.addColorStop(1, 'rgba(0,0,0,0.62)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, W, H);
+      this.textures.addCanvas(key, canvas);
+    }
+    return key;
   }
 
   makeSparkTexture() {
@@ -451,6 +479,7 @@ export class BattlefieldScene extends Phaser.Scene {
     };
     this.bossNameText.setText(this.bossLabel(this.bossState));
     this.hpBarFill.width = L.hpBar.width;
+    this.hpBarFill.setFillStyle(0x22c55e);
     this.hpText.setText(`${formatHp(payload.max_hp)} / ${formatHp(payload.max_hp)}`);
     this.leaderboard?.reset();
     // Reset damage totals and fighter sizes for new boss

@@ -49,6 +49,9 @@ export function applyImpact(scene, hpAfter) {
     duration: TIMINGS.hpBarMs,
     ease: 'Quad.easeOut',
     onUpdate: () => {
+      const pct = counter.v / max;
+      const color = pct > 0.5 ? 0x22c55e : pct > 0.25 ? 0xf59e0b : 0xef4444;
+      scene.hpBarFill.setFillStyle(color);
       scene.hpBarFill.width = Math.round(hpBar.width * (counter.v / max));
       scene.hpText.setText(`${formatHp(counter.v)} / ${formatHp(max)}`);
     },
