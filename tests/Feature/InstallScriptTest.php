@@ -40,12 +40,21 @@ test('install.sh covers every claude code hook event', function () {
     }
 });
 
-test('install.sh writes to claude settings and codex config and uses idempotent markers', function () {
+test('install.sh covers every antigravity CLI hook event', function () {
+    $script = $this->get('/install')->getContent();
+
+    foreach (['SessionStart', 'PreInvocation', 'PreToolUse', 'PostToolUse', 'Stop'] as $event) {
+        expect($script)->toContain($event);
+    }
+});
+
+test('install.sh writes to claude settings, codex config, and antigravity hooks and uses idempotent markers', function () {
     $script = $this->get('/install')->getContent();
 
     expect($script)
         ->toContain('$HOME/.claude/settings.json')
         ->toContain('$HOME/.codex/config.toml')
+        ->toContain('$HOME/.gemini/config/hooks.json')
         ->toContain('# >>> token_slayer hooks')
         ->toContain('# <<< token_slayer hooks');
 });

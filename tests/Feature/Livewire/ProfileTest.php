@@ -95,3 +95,13 @@ test('regenerate replaces the hook token', function () {
 
     expect($user->fresh()->hook_token)->not->toBe($original);
 });
+
+test('manual hook config shows Antigravity configuration', function () {
+    $user = User::factory()->create();
+    $this->actingAs($user);
+
+    $this->get('/profile')
+        ->assertOk()
+        ->assertSee('~/.gemini/config/hooks.json')
+        ->assertSee('PROVIDER=antigravity');
+});

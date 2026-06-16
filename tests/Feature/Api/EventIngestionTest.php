@@ -79,6 +79,29 @@ test('Stop event without inline tokens reads damage from the transcript file', f
     @unlink($transcript);
 });
 
+test('Stop event without inline tokens reads damage from the Antigravity transcript file', function () {
+    $transcript = tempnam(sys_get_temp_dir(), 'transcript-agy-');
+    file_put_contents($transcript, collect([
+        ['source' => 'USER_EXPLICIT', 'type' => 'USER_INPUT', 'content' => 'hello'],
+        ['source' => 'MODEL', 'type' => 'PLANNER_RESPONSE', 'usage' => ['output_tokens' => 150_000]],
+        ['source' => 'SYSTEM', 'type' => 'TOOL_RESULT', 'content' => 'tool done'],
+        ['source' => 'MODEL', 'type' => 'PLANNER_RESPONSE', 'usage' => ['output_tokens' => 100_000]],
+    ])->map(fn ($e) => json_encode($e))->implode("\n"));
+
+    $this->withHeader('Authorization', 'Bearer tok')
+        ->postJson('/api/events?provider=antigravity', [
+            'hook_event_name' => 'Stop',
+            'session_id' => 'sess-agy-transcript',
+            'transcriptPath' => $transcript,
+        ])
+        ->assertCreated();
+
+    expect(Boss::sole()->current_hp)->toBe(750_000)
+        ->and(Event::sole()->tokens)->toBe(250_000);
+
+    @unlink($transcript);
+});
+
 test('Stop event still applies damage when a broadcast listener throws', function () {
     Illuminate\Support\Facades\Event::listen(HitDealt::class, function () {
         throw new RuntimeException('simulated broadcast failure');

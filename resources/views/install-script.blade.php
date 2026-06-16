@@ -5,7 +5,7 @@
 @endphp
 {!! '#!/bin/sh' !!}
 # {{ $namespace }} hook installer
-# Installs Claude Code + Codex CLI hooks that POST to {{ $baseUrl }}.
+# Installs Claude Code, Codex, and Antigravity CLI hooks that POST to {{ $baseUrl }}.
 # Hooks read the token at runtime from ~/.config/{{ $namespace }}/token.
 #
 # Pass {{ $envVar }}=<token> in the environment to save the token in the
@@ -41,7 +41,7 @@ BODY=$(cat)
 [ -r "$TOKEN_FILE" ] || exit 0
 
 if command -v jq >/dev/null 2>&1; then
-  TRANSCRIPT=$(printf '%s' "$BODY" | jq -r '.transcript_path // ""' 2>/dev/null)
+  TRANSCRIPT=$(printf '%s' "$BODY" | jq -r '.transcript_path // .transcriptPath // ""' 2>/dev/null)
   if [ -n "$TRANSCRIPT" ] && [ -r "$TRANSCRIPT" ]; then
     TOKENS=$(jq -sr '
       . as $a
@@ -49,8 +49,10 @@ if command -v jq >/dev/null 2>&1; then
       | reduce range($end; -1; -1) as $i ({t:0, stop:false};
           if .stop then . else
             ($a[$i]) as $e
-            | if $e.type == "assistant" then
-                .t += ($e.message.usage.output_tokens // 0)
+            | if $e.type == "assistant" or $e.type == "PLANNER_RESPONSE" or $e.source == "MODEL" then
+                .t += ($e.message.usage.output_tokens // $e.usage.output_tokens // $e.usage.outputTokens // 0)
+              elif ($e.type == "USER_INPUT" or $e.source == "USER_EXPLICIT") then
+                .stop = true
               elif $e.type == "user"
                    and ((try $e.message.content[0].type catch null) != "tool_result") then
                 .stop = true
@@ -67,6 +69,8 @@ fi
 URL="$API_URL"
 if [ "${PROVIDER:-}" = "codex" ]; then
   URL="${URL}?provider=codex"
+elif [ "${PROVIDER:-}" = "antigravity" ]; then
+  URL="${URL}?provider=antigravity"
 fi
 
 curl -s --max-time 3 -X POST "$URL" \
@@ -78,6 +82,7 @@ chmod +x "$HELPER"
 
 CLAUDE_CMD="bash $HELPER"
 CODEX_CMD="PROVIDER=codex bash $HELPER"
+AGY_CMD="PROVIDER=antigravity bash $HELPER"
 
 # If {{ $envVar }} was passed, save it now so a single command does both
 # hook setup and token install.
@@ -154,6 +159,52 @@ command = "$CODEX_CMD"
 EOF
 
 echo "installed Codex CLI hooks -> $CODEX_CONFIG"
+
+# --- Antigravity CLI: merge into ~/.gemini/config/hooks.json ---
+mkdir -p "$HOME/.gemini/config"
+AGY_HOOKS="$HOME/.gemini/config/hooks.json"
+[ -s "$AGY_HOOKS" ] || echo '{}' > "$AGY_HOOKS"
+
+AGY_CMD="$AGY_CMD" NAMESPACE="{{ $namespace }}" "$PY" - "$AGY_HOOKS" <<'PY'
+import json, os, sys
+
+path = sys.argv[1]
+cmd = os.environ["AGY_CMD"]
+ns = os.environ["NAMESPACE"]
+
+with open(path) as f:
+    try:
+        data = json.load(f)
+    except Exception:
+        data = {}
+
+# Ensure data is a dictionary
+if not isinstance(data, dict):
+    data = {}
+
+# We want to set data[ns] = { ... }
+ns_data = data.setdefault(ns, {})
+if not isinstance(ns_data, dict):
+    ns_data = {}
+    data[ns] = ns_data
+
+# Simple events without matchers
+for event in ["SessionStart", "PreInvocation", "Stop"]:
+    ns_data[event] = [{"type": "command", "command": cmd}]
+
+# Events with matchers (tool hooks)
+for event in ["PreToolUse", "PostToolUse"]:
+    ns_data[event] = [{
+        "matcher": "*",
+        "hooks": [{"type": "command", "command": cmd}]
+    }]
+
+with open(path, "w") as f:
+    json.dump(data, f, indent=2)
+    f.write("\n")
+PY
+
+echo "installed Antigravity CLI hooks -> $AGY_HOOKS"
 
 if [ -z "{!! $envCheck !!}" ] && [ ! -s "$HOME/.config/{{ $namespace }}/token" ]; then
     echo ""
