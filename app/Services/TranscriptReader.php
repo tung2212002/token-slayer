@@ -41,13 +41,27 @@ class TranscriptReader
         for ($i = count($entries) - 1; $i >= 0; $i--) {
             $entry = $entries[$i];
 
-            if ($entry['type'] === 'assistant') {
-                $tokens += (int) ($entry['message']['usage']['output_tokens'] ?? 0);
+            $isAssistant = ($entry['type'] ?? '') === 'assistant'
+                || ($entry['type'] ?? '') === 'PLANNER_RESPONSE'
+                || ($entry['source'] ?? '') === 'MODEL';
+
+            if ($isAssistant) {
+                $tokens += (int) ($entry['message']['usage']['output_tokens']
+                    ?? $entry['usage']['output_tokens']
+                    ?? $entry['usage']['outputTokens']
+                    ?? 0);
 
                 continue;
             }
 
-            if ($entry['type'] === 'user' && ! $this->isToolResultWrapper($entry)) {
+            $isUser = ($entry['type'] ?? '') === 'user'
+                || ($entry['type'] ?? '') === 'USER_INPUT'
+                || ($entry['source'] ?? '') === 'USER_EXPLICIT';
+
+            if ($isUser) {
+                if (($entry['type'] ?? '') === 'user' && $this->isToolResultWrapper($entry)) {
+                    continue;
+                }
                 break;
             }
         }
