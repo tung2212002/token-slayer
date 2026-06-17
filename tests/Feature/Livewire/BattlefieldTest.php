@@ -12,7 +12,7 @@ uses(RefreshDatabase::class);
 
 test('battlefield component renders the current boss and active fighters', function () {
     $boss = Boss::factory()->create(['number' => 3, 'max_hp' => 3_000_000, 'current_hp' => 1_500_000]);
-    $fighter = User::factory()->create(['last_event_at' => now()->subMinutes(2)]);
+    $fighter = User::factory()->create(['last_event_at' => now()->subMinutes(2), 'display_name' => null]);
     User::factory()->create(['last_event_at' => now()->subHour()]); // idle
 
     Livewire::test(Battlefield::class)
@@ -54,8 +54,8 @@ test('battlefield shows a link back to the profile page', function () {
 test('battlefield seeds leaderboard with per-fighter damage for the current boss', function () {
     $previousBoss = Boss::factory()->defeated()->create(['number' => 6]);
     $boss = Boss::factory()->create(['number' => 7]);
-    $alice = User::factory()->create(['slack_handle' => 'alice', 'last_event_at' => now()->subMinute()]);
-    $bob = User::factory()->create(['slack_handle' => 'bob', 'last_event_at' => now()->subMinute()]);
+    $alice = User::factory()->create(['slack_handle' => 'alice', 'display_name' => null, 'last_event_at' => now()->subMinute()]);
+    $bob = User::factory()->create(['slack_handle' => 'bob', 'display_name' => null, 'last_event_at' => now()->subMinute()]);
 
     Event::factory()->create(['user_id' => $alice->id, 'boss_id' => $boss->id, 'tokens' => 1_200]);
     Event::factory()->create(['user_id' => $alice->id, 'boss_id' => $boss->id, 'tokens' => 800]);
@@ -66,6 +66,14 @@ test('battlefield seeds leaderboard with per-fighter damage for the current boss
     Livewire::test(Battlefield::class)
         ->assertSeeHtml('&quot;userId&quot;:'.$alice->id.',&quot;handle&quot;:&quot;alice&quot;,&quot;damage&quot;:2000')
         ->assertSeeHtml('&quot;userId&quot;:'.$bob->id.',&quot;handle&quot;:&quot;bob&quot;,&quot;damage&quot;:500');
+});
+
+test('battlefield state assigns each fighter the character for the current boss', function () {
+    $boss = Boss::factory()->create();
+    $fighter = User::factory()->create(['last_event_at' => now()->subMinute()]);
+
+    Livewire::test(Battlefield::class)
+        ->assertSeeHtml('&quot;character&quot;:&quot;'.$fighter->characterForBoss($boss->id).'&quot;');
 });
 
 test('battlefield leaderboard payload is empty when no damage logged for the current boss', function () {
@@ -80,6 +88,7 @@ test('battlefield payloads fall back to user name when slack_handle is null', fu
     $user = User::factory()->create([
         'name' => 'Trung',
         'slack_handle' => null,
+        'display_name' => null,
         'last_event_at' => now()->subMinute(),
     ]);
     Event::factory()->create([
