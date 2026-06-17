@@ -163,7 +163,7 @@ function slashBurst(scene, fighter, x, y, { isKillShot, tints }) {
 export const ATTACK_HANDLERS = {
 
   // ── Knight ──────────────────────────────────────────────────────────────────
-  slash(scene, fighter, { isKillShot, damage, maxHp, onImpact }) {
+  slash(scene, fighter, { isKillShot, damage, maxHp, onImpact, onEffect }) {
     runDash(scene, fighter, {
       dashDist:  fighter.displaySize * (isKillShot ? 0.55 : 0.35),
       runDur:    isKillShot ? 180 : 130,
@@ -171,6 +171,7 @@ export const ATTACK_HANDLERS = {
     }, ({ dashX, dashY, towardBoss, sc }) => {
       const cx = dashX;
       const cy = dashY - fighter.displaySize * 0.15;
+      onEffect?.(cx, cy);
 
       swingArc(scene, fighter, cx, cy, {
         isKillShot, colOuter: 0xffffff, colInner: 0x93c5fd, onImpact,
@@ -191,7 +192,7 @@ export const ATTACK_HANDLERS = {
 
   // ── Redhat — Magic Circle → Beam ────────────────────────────────────────────
   // Stands still: channels energy → spinning rune circle → fires purple beam
-  blast(scene, fighter, { isKillShot, damage, maxHp, onImpact }) {
+  blast(scene, fighter, { isKillShot, damage, maxHp, onImpact, onEffect }) {
     const sc          = fighter.sprite.scaleX;
     const fx          = fighter.pos.x;
     const fy          = fighter.pos.y;
@@ -245,6 +246,7 @@ export const ATTACK_HANDLERS = {
 
     // Fire at peak charge
     scene.time.delayedCall(chargeDur + 15, () => {
+      onEffect?.(fighter.pos.x, fighter.pos.y);
       slashBurst(scene, fighter, circleX, circleY, {
         isKillShot, tints: [0x7c3aed, 0xa855f7, 0x22d3ee, 0xc026d3, 0xffffff],
       });
@@ -276,7 +278,7 @@ export const ATTACK_HANDLERS = {
 
   // ── Ninjagirl — Teleport Dash + Shuriken Fan ─────────────────────────────────
   // Ultra-fast blink with ghost afterimages → fan of shurikens at peak
-  shuriken(scene, fighter, { isKillShot, damage, maxHp, onImpact }) {
+  shuriken(scene, fighter, { isKillShot, damage, maxHp, onImpact, onEffect }) {
     const sc         = fighter.sprite.scaleX;
     const fx         = fighter.pos.x;
     const fy         = fighter.pos.y;
@@ -339,6 +341,7 @@ export const ATTACK_HANDLERS = {
           });
         });
 
+        onEffect?.(dashX, impactY);
         slashBurst(scene, fighter, dashX, impactY, {
           isKillShot, tints: [0xf0abfc, 0xe879f9, 0xa855f7, 0xfdf4ff],
         });
@@ -361,7 +364,7 @@ export const ATTACK_HANDLERS = {
 
   // ── Shinobi — Shadow Dash to Boss + Cross-Slash ──────────────────────────────
   // Teleport-blink all the way to boss with shadow ghosts, double arc slash, return blink
-  blade(scene, fighter, { isKillShot, damage, maxHp, onImpact }) {
+  blade(scene, fighter, { isKillShot, damage, maxHp, onImpact, onEffect }) {
     const sc         = fighter.sprite.scaleX;
     const fx         = fighter.pos.x;
     const fy         = fighter.pos.y;
@@ -412,6 +415,7 @@ export const ATTACK_HANDLERS = {
         const strikeX = dashX;
         const strikeY = dashY - ds * 0.2;
 
+        onEffect?.(strikeX, strikeY);
         swingArc(scene, fighter, strikeX, strikeY, {
           isKillShot, colOuter: 0x4c1d95, colInner: 0xa855f7, delay: 0,
         });
@@ -471,7 +475,7 @@ export const ATTACK_HANDLERS = {
 
   // ── Adventurer — Draw Bow → Hold → Release ───────────────────────────────────
   // Steps back, draws bow with energy gathering, then fires arrow streak (no forward dash)
-  arrow(scene, fighter, { isKillShot, damage, maxHp, onImpact }) {
+  arrow(scene, fighter, { isKillShot, damage, maxHp, onImpact, onEffect }) {
     const sc         = fighter.sprite.scaleX;
     const fx         = fighter.pos.x;
     const fy         = fighter.pos.y;
@@ -551,6 +555,7 @@ export const ATTACK_HANDLERS = {
                 onComplete: () => trailG.destroy(),
               });
 
+              onEffect?.(fx, fireY);
               slashBurst(scene, fighter, fx + towardBoss * ds * 0.28, fireY, {
                 isKillShot, tints: [0xfde68a, 0xfbbf24, 0xf97316, 0x86efac],
               });

@@ -50,7 +50,7 @@ export function createLeaderboard(scene) {
   gfx.lineStyle(1, BORDER_COLOR, 0.4);
   gfx.lineBetween(panL + INNER_PAD, sepY, panL + PANEL_W - INNER_PAD, sepY);
 
-  scene.addSharpText(panL + INNER_PAD, panTopY + INNER_PAD, '▸ TOP DAMAGE', {
+  const titleText = scene.addSharpText(panL + INNER_PAD, panTopY + INNER_PAD, '▸ TOP DAMAGE', {
     fontFamily: 'monospace',
     fontSize: '16px',
     color: TITLE_COLOR,
@@ -133,25 +133,37 @@ export function createLeaderboard(scene) {
     if (isPortrait) emitPortrait(fighters);
   }
 
-  return makeMethods(fighters, scene, render);
+  const allDisplayObjects = [gfx, titleText, ...rows.flatMap(r => [r.rank, r.name, r.right]), ...shimmers];
+
+  return {
+    ...makeMethods(fighters, scene, render),
+    hide() {
+      for (const o of allDisplayObjects) o.setVisible(false);
+      for (const f of fires) f.hide();
+    },
+    show() {
+      for (const o of allDisplayObjects) o.setVisible(true);
+      render();
+    },
+  };
 }
 
 // Per-rank fire config: rank 0 = tallest/brightest, rank 2 = shortest/dimmest.
 // tickEvery slows the simulation (2 = 30fps, 3 = 20fps) so flames feel natural.
 const FIRE_TIERS = [
-  { dh: 30, seedHeat: 255, tickEvery: 2, palette: [
+  { dh: 30, seedHeat: 255, tickEvery: 1, palette: [
     { minH: 1,   color: 0xcc1100, alpha: 0.60 },
     { minH: 64,  color: 0xff4400, alpha: 0.85 },
     { minH: 128, color: 0xff9900, alpha: 0.95 },
     { minH: 192, color: 0xffee00, alpha: 1.00 },
   ]},
-  { dh: 22, seedHeat: 190, tickEvery: 2, palette: [
+  { dh: 22, seedHeat: 190, tickEvery: 1, palette: [
     { minH: 1,   color: 0x991100, alpha: 0.50 },
     { minH: 64,  color: 0xee3300, alpha: 0.75 },
     { minH: 128, color: 0xff8800, alpha: 0.88 },
     { minH: 192, color: 0xffcc00, alpha: 0.95 },
   ]},
-  { dh: 14, seedHeat: 130, tickEvery: 3, palette: [
+  { dh: 14, seedHeat: 130, tickEvery: 2, palette: [
     { minH: 1,   color: 0x661100, alpha: 0.40 },
     { minH: 50,  color: 0xcc2200, alpha: 0.62 },
     { minH: 95,  color: 0xee5500, alpha: 0.76 },
@@ -206,14 +218,17 @@ function createDoomFire(scene, nameX, baseY, rank) {
     tick() {
       frame++;
       if (frame % cfg.tickEvery !== 0) return;
+      if (Math.random() > 0.4) return;
 
       for (let y = 0; y < fh - 1; y++) {
         for (let x = 0; x < fw; x++) {
           const heat  = buf[(y + 1) * fw + x];
           const decay = 2 + ((Math.random() * 40) | 0);
-          const drift = ((Math.random() * 3) | 0) - 1;
-          const dx    = Math.max(0, Math.min(fw - 1, x + drift));
-          buf[y * fw + dx] = Math.max(0, heat - decay);
+          const drift = ((Math.random() * 2) | 0);
+          const dx    = x + drift;
+          if (dx < fw) {
+            buf[y * fw + dx] = Math.max(0, heat - decay);
+          }
         }
       }
 

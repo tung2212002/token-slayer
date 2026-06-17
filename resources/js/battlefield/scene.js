@@ -7,27 +7,64 @@ import { applyImpact } from './impact.js';
 import { createLeaderboard, showMvpCard } from './leaderboard.js';
 import { formatHp } from './format.js';
 
-// Tiny RPG sprites upscaled 4× — frames are now 400×400
-// Visible character occupied rows 38-56 in the original 100px frame → 152-224 at 4×
-const SPRITE_CHAR_HEIGHT = 72;   // (56 - 38) × 4
-const SPRITE_HALF_FRAME  = 200;  // 400 / 2
-const SPRITE_CHAR_TOP    = 152;  // 38 × 4
-const SPRITE_CHAR_BOT    = 224;  // 56 × 4
+// Tiny RPG sprites — original 100×100 frames
+// Visible character occupies rows 38-56 of the 100px frame
+const SPRITE_CHAR_HEIGHT = 18;   // 56 - 38
+const SPRITE_HALF_FRAME  = 50;   // 100 / 2
+const SPRITE_CHAR_TOP    = 38;
+const SPRITE_CHAR_BOT    = 56;
 
 const ACTIVITY_MAX_CHARS = 18;
-function truncateActivity(activity) {
-  if (!activity || activity.length <= ACTIVITY_MAX_CHARS) {
+function truncateActivity(activity, maxChars = ACTIVITY_MAX_CHARS) {
+  if (!activity || activity.length <= maxChars) {
     return activity ?? '';
   }
-  return activity.slice(0, ACTIVITY_MAX_CHARS - 1) + '…';
+  return activity.slice(0, maxChars - 1) + '…';
 }
 
-const HANDLE_MAX_CHARS = 6;
-function truncateHandle(handle) {
-  if (!handle || handle.length <= HANDLE_MAX_CHARS) {
+const HANDLE_MAX_CHARS = 12;
+function truncateHandle(handle, maxChars = HANDLE_MAX_CHARS) {
+  if (!handle || handle.length <= maxChars) {
     return handle ?? '';
   }
-  return handle.slice(0, HANDLE_MAX_CHARS - 1) + '…';
+  return handle.slice(0, maxChars - 1) + '…';
+}
+
+function handleFontPx(displaySize) {
+  return Math.max(10, Math.round(displaySize * 0.25));
+}
+
+function chargeParticleColors(ftype) {
+  switch (ftype) {
+    case 'werewolf':
+    case 'werebear':
+      // purple/blue — wild feral energy
+      return [0x4400aa, 0x6600cc, 0x8833dd, 0xaa55ee, 0xcc88ff];
+    case 'orc':
+    case 'armored-orc':
+    case 'elite-orc':
+    case 'orc-rider':
+      // green — orcish power
+      return [0x005500, 0x117700, 0x33aa00, 0x55cc11, 0x88ee44];
+    case 'skeleton':
+    case 'armored-skeleton':
+    case 'greatsword-skeleton':
+      // cold blue/white — undead
+      return [0x003366, 0x0055aa, 0x1188cc, 0x44bbee, 0xaaddff];
+    case 'slime':
+      // acid green
+      return [0x336600, 0x558800, 0x88bb00, 0xaadd00, 0xddff44];
+    case 'archer':
+      // golden/yellow — swift energy
+      return [0x886600, 0xaa8800, 0xccaa00, 0xeecc00, 0xffee44];
+    default:
+      // fire orange/red — knight, axeman, soldier, swordsman, etc.
+      return [0x991100, 0xcc3300, 0xdd6600, 0xee9900, 0xffbb00];
+  }
+}
+
+function avatarPx(displaySize) {
+  return Math.round(displaySize * 0.85);
 }
 
 export class BattlefieldScene extends Phaser.Scene {
@@ -41,6 +78,17 @@ export class BattlefieldScene extends Phaser.Scene {
         const texKey = `${ft.key}-${state}`;
         if (!this.textures.exists(texKey))
           this.load.spritesheet(texKey, anim.file, { frameWidth: ft.frameWidth, frameHeight: ft.frameHeight });
+      }
+      for (let i = 0; i < (ft.attacks?.length ?? 0); i++) {
+        const atk = ft.attacks[i];
+        const atkKey = `${ft.key}-attack${i + 1}`;
+        if (!this.textures.exists(atkKey))
+          this.load.spritesheet(atkKey, atk.file, { frameWidth: ft.frameWidth, frameHeight: ft.frameHeight });
+        if (atk.effect) {
+          const effKey = `${ft.key}-effect${i + 1}`;
+          if (!this.textures.exists(effKey))
+            this.load.spritesheet(effKey, atk.effect, { frameWidth: ft.frameWidth, frameHeight: ft.frameHeight });
+        }
       }
     }
     for (const boss of BOSS_TYPES) {
@@ -63,6 +111,7 @@ export class BattlefieldScene extends Phaser.Scene {
       for (const ft of FIGHTER_TYPES) {
         for (const [state, anim] of Object.entries(ft.animations)) {
           const animKey = `${ft.key}-${state}`;
+          this.textures.get(animKey)?.setFilter(Phaser.Textures.FilterMode.NEAREST);
           if (!this.anims.exists(animKey)) {
             this.anims.create({
               key: animKey,
@@ -70,6 +119,21 @@ export class BattlefieldScene extends Phaser.Scene {
               frameRate: anim.rate,
               repeat: (state === 'idle' || state === 'walk') ? -1 : 0,
             });
+          }
+        }
+        for (let i = 0; i < (ft.attacks?.length ?? 0); i++) {
+          const atk = ft.attacks[i];
+          const atkKey = `${ft.key}-attack${i + 1}`;
+          this.textures.get(atkKey)?.setFilter(Phaser.Textures.FilterMode.NEAREST);
+          if (!this.anims.exists(atkKey)) {
+            this.anims.create({ key: atkKey, frames: this.anims.generateFrameNumbers(atkKey, { start: 0, end: atk.frames - 1 }), frameRate: atk.rate, repeat: 0 });
+          }
+          if (atk.effect) {
+            const effKey = `${ft.key}-effect${i + 1}`;
+            this.textures.get(effKey)?.setFilter(Phaser.Textures.FilterMode.NEAREST);
+            if (!this.anims.exists(effKey)) {
+              this.anims.create({ key: effKey, frames: this.anims.generateFrameNumbers(effKey, { start: 0, end: atk.effectFrames - 1 }), frameRate: atk.rate, repeat: 0 });
+            }
           }
         }
       }
@@ -351,13 +415,17 @@ export class BattlefieldScene extends Phaser.Scene {
     }
     this.clearCharge(payload.user_id);
     const fighter = this.fighters.get(payload.user_id);
+    const key     = fighter?.ftype?.key ?? null;
+    const attacks = fighter?.ftype?.attacks ?? null;
+    const pickIdx = attacks?.length ? Phaser.Math.Between(0, attacks.length - 1) : -1;
+    const flipTowardBoss = fighter ? fighter.pos.x > this.layout.boss.anchor.x : false;
     if (fighter?.body) {
-      const key = fighter.ftype.key;
-      const flipTowardBoss = fighter.pos.x > this.layout.boss.anchor.x;
+      const atkAnimKey = pickIdx >= 0 ? `${key}-attack${pickIdx + 1}` : `${key}-attack`;
       fighter.animState = 'attack';
       fighter.body.off(Phaser.Animations.Events.ANIMATION_COMPLETE);
       fighter.body.setFlipX(flipTowardBoss);
-      fighter.body.play(`${key}-attack`);
+      fighter.body.play(atkAnimKey);
+
       fighter.body.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
         if (!fighter.body?.scene) return;
         const next = this.charges.has(fighter.id) ? 'walk' : 'idle';
@@ -385,11 +453,23 @@ export class BattlefieldScene extends Phaser.Scene {
     if (fighter) {
       const attackType = fighter.ftype?.attackType ?? 'blast';
       const handler = ATTACK_HANDLERS[attackType] ?? ATTACK_HANDLERS.blast;
+      const effKey = (pickIdx >= 0 && attacks?.[pickIdx]?.effect) ? `${key}-effect${pickIdx + 1}` : null;
+      const onEffect = effKey ? (x, y) => {
+        if (!fighter.body?.scene) return;
+        const eff = this.add.sprite(x, y, effKey)
+          .setScale(fighter.sprite.scaleX * fighter.body.scaleX)
+          .setFlipX(flipTowardBoss)
+          .setBlendMode(Phaser.BlendModes.ADD)
+          .setDepth(3)
+          .play(effKey);
+        eff.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => eff.destroy());
+      } : null;
       handler(this, fighter, {
         isKillShot,
         damage: payload.damage,
         maxHp: this.bossState?.maxHp ?? 1,
         onImpact,
+        onEffect,
       });
     } else {
       this.time.delayedCall(TIMINGS.projectileArcMs, onImpact);
@@ -553,10 +633,24 @@ export class BattlefieldScene extends Phaser.Scene {
       fighter.body.setFlipX(fighter.pos.x > this.layout.boss.anchor.x);
       fighter.body.play(fighter.ftype.key + '-walk');
     }
+    const localFootY = Math.round(fighter.displaySize / 3);
+    const { fireEmitter, fireEmbers } = this.spawnChargeFireEmitters(fighter.ftype, 0, localFootY, fighter.displaySize);
+    fighter.sprite.addAt(fireEmbers, 0);
+    fighter.sprite.addAt(fireEmitter, 0);
     const ring  = this.createChargingRing(fighter);
     const trail = this.createChargingTrail(fighter);
     fighter.sprite.addAt(ring, 0);
-    const entry = { ring, trail, bubble: null, activity: payload.activity ?? '' };
+    const avSize = fighter.avatarSize ?? avatarPx(fighter.displaySize);
+    const breath = fighter.head ? this.tweens.add({
+      targets: fighter.head,
+      displayWidth: avSize * 1.06,
+      displayHeight: avSize * 1.06,
+      duration: TIMINGS.chargeRingPulseMs / 2,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    }) : null;
+    const entry = { ring, trail, fireEmitter, fireEmbers, breath, bubble: null, activity: payload.activity ?? '' };
     if (this.fightersAllowBubbles()) {
       this.updateActivityBubble(entry, fighter, payload.activity);
     }
@@ -564,9 +658,9 @@ export class BattlefieldScene extends Phaser.Scene {
   }
 
   createChargingRing(fighter) {
-    // Ring sits around the avatar face bubble — radius just outside the 28px circle
     const avatarRelY = fighter.head?.y ?? 0;
-    const r = 19;  // avatar radius is 14 (28px / 2), ring extends 5px beyond
+    const avR = (fighter.avatarSize ?? avatarPx(fighter.displaySize)) / 2;
+    const r   = Math.round(avR + Math.max(4, fighter.displaySize * 0.08));
     const g = this.add.graphics();
     g.lineStyle(2, 0x22d3ee, 1);
     g.strokeCircle(0, 0, r);
@@ -605,8 +699,46 @@ export class BattlefieldScene extends Phaser.Scene {
     return emitter;
   }
 
+  spawnChargeFireEmitters(ftype, localX, localFootY, displaySize) {
+    const fireColors = chargeParticleColors(ftype);
+    const ps = displaySize * 0.018;
+    const fireEmitter = this.add.particles(localX, localFootY, 'spark', {
+      tint:      { onEmit: () => Phaser.Math.RND.pick(fireColors) },
+      rotate:    { min: 0, max: 360 },
+      scale:     { start: ps, end: 0 },
+      alpha:     { start: 0.55, end: 0 },
+      speedX:    { min: -180, max: 180 },
+      speedY:    { min: -90, max: 20 },
+      lifespan:  { min: 280, max: 480 },
+      frequency: 22,
+      quantity:  3,
+      gravityY:  80,
+      blendMode: Phaser.BlendModes.ADD,
+    });
+    const fireEmbers = this.add.particles(localX, localFootY, 'spark', {
+      tint:      { onEmit: () => Phaser.Math.RND.pick(fireColors) },
+      rotate:    { min: 0, max: 360 },
+      scale:     { start: ps * 0.5, end: 0 },
+      alpha:     { start: 0.4, end: 0 },
+      speedX:    { min: -240, max: 240 },
+      speedY:    { min: -60, max: 30 },
+      lifespan:  { min: 200, max: 400 },
+      frequency: 28,
+      quantity:  2,
+      gravityY:  60,
+      blendMode: Phaser.BlendModes.ADD,
+    });
+    return { fireEmitter, fireEmbers };
+  }
+
   fightersAllowBubbles() {
     return fighterDisplayConfig(this.fighters.size, this.mode).showHandle;
+  }
+
+  activityBubbleY(fighter) {
+    const avatarRelY  = fighter.head?.y ?? 0;
+    const avatarRadius = (fighter.head?.displayHeight ?? 28) / 2;
+    return fighter.pos.y + avatarRelY - avatarRadius - 28;
   }
 
   updateActivityBubble(entry, fighter, activity) {
@@ -621,14 +753,16 @@ export class BattlefieldScene extends Phaser.Scene {
       entry.bubble.setActivity(activity);
       return;
     }
-    const bubbleY = fighter.pos.y - fighter.displaySize - 10;
-    entry.bubble = this.createActivityBubble(fighter.pos.x, bubbleY, activity);
+    const bubbleY  = this.activityBubbleY(fighter);
+    const fontPx   = Math.max(9, Math.round(fighter.displaySize * 0.22));
+    const maxChars = Math.max(12, Math.round(fighter.displaySize * 0.35));
+    entry.bubble = this.createActivityBubble(fighter.pos.x, bubbleY, activity, fontPx, maxChars);
   }
 
-  createActivityBubble(x, y, activity) {
-    const text = this.addSharpText(x, y, truncateActivity(activity), {
+  createActivityBubble(x, y, activity, fontPx = 14, maxChars = ACTIVITY_MAX_CHARS) {
+    const text = this.addSharpText(x, y, truncateActivity(activity, maxChars), {
       fontFamily: 'monospace',
-      fontSize: '14px',
+      fontSize: `${fontPx}px`,
       color: '#f1f5f9',
       padding: { left: 8, right: 8, top: 4, bottom: 4 },
     });
@@ -660,13 +794,46 @@ export class BattlefieldScene extends Phaser.Scene {
     if (!payload || payload.user_id == null) {
       return;
     }
-    this.clearCharge(payload.user_id);
+    const userId = payload.user_id;
+    this.clearCharge(userId);
+    this.removeFighter(userId);
+  }
+
+  removeFighter(userId) {
+    const entry = this.fighters.get(userId);
+    if (!entry) {
+      return;
+    }
+    this.fighters.delete(userId);
+    this.tweens.add({
+      targets: entry.sprite,
+      alpha: 0,
+      duration: 300,
+      onComplete: () => { if (entry.sprite?.scene) entry.sprite.destroy(); },
+    });
+    if (entry.handle?.scene) {
+      this.tweens.add({
+        targets: entry.handle,
+        alpha: 0,
+        duration: 300,
+        onComplete: () => { if (entry.handle?.scene) entry.handle.destroy(); },
+      });
+    }
+    this.relayoutFighters();
   }
 
   clearCharge(userId) {
     const entry = this.charges.get(userId);
     if (!entry) {
       return;
+    }
+    if (entry.breath) {
+      entry.breath.stop();
+      const fighter = this.fighters.get(userId);
+      if (fighter?.head?.scene) {
+        const av = fighter.avatarSize ?? avatarPx(fighter.displaySize);
+        fighter.head.setDisplaySize(av, av);
+      }
     }
     if (entry.ring?.scene) {
       this.tweens.killTweensOf(entry.ring);
@@ -681,6 +848,14 @@ export class BattlefieldScene extends Phaser.Scene {
     if (entry.trail?.scene) {
       entry.trail.stop();
       this.time.delayedCall(250, () => { if (entry.trail?.scene) entry.trail.destroy(); });
+    }
+    if (entry.fireEmitter?.scene) {
+      entry.fireEmitter.stop();
+      this.time.delayedCall(500, () => { if (entry.fireEmitter?.scene) entry.fireEmitter.destroy(); });
+    }
+    if (entry.fireEmbers?.scene) {
+      entry.fireEmbers.stop();
+      this.time.delayedCall(500, () => { if (entry.fireEmbers?.scene) entry.fireEmbers.destroy(); });
     }
     if (entry.bubble) {
       entry.bubble.destroy();
@@ -734,12 +909,14 @@ export class BattlefieldScene extends Phaser.Scene {
         entry.sprite.setScale(this.fighterRestScale(entry));
       }
 
-      const scale = entry.sprite.scaleX;
-      const handleY = target.y + entry.legH * scale + 14;
+      const scale   = entry.sprite.scaleX;
+      const fontPx  = handleFontPx(newSize);
+      const maxChrs = Math.max(8, Math.round(newSize * 0.22));
+      const handleY = target.y + entry.legH * scale + fontPx;
       if (config.showHandle && !entry.handle) {
-        entry.handle = this.addSharpText(target.x, handleY, truncateHandle(entry.handleText), {
+        entry.handle = this.addSharpText(target.x, handleY, truncateHandle(entry.handleText, maxChrs), {
           fontFamily: 'monospace',
-          fontSize: '16px',
+          fontSize: `${fontPx}px`,
           color: '#fbbf24',
         });
       } else if (!config.showHandle && entry.handle) {
@@ -780,20 +957,16 @@ export class BattlefieldScene extends Phaser.Scene {
           );
         }
         if (charge.bubble) {
-          charge.bubble.moveTo(target.x, target.y - newSize - 10);
+          const avatarRelY   = entry.head?.y ?? 0;
+          const avatarRadius = (entry.head?.displayHeight ?? 28) / 2;
+          charge.bubble.moveTo(target.x, target.y + avatarRelY - avatarRadius - 16);
         }
       }
     }
   }
 
-  loadAvatarTexture(fighter) {
-    const key = `fighter-${fighter.id}`;
-    if (this.textures.exists(key)) {
-      return Promise.resolve(key);
-    }
-    if (!fighter.avatarUrl) {
-      return Promise.reject(new Error('no avatar URL'));
-    }
+  loadAvatarTexture(fighterId, avatarUrl) {
+    const key = `fighter-${fighterId}`;
     return new Promise((resolve, reject) => {
       const img = new Image();
       img.crossOrigin = 'anonymous';
@@ -803,15 +976,16 @@ export class BattlefieldScene extends Phaser.Scene {
           return;
         }
         if (this.textures.exists(key)) {
-          resolve(key);
-          return;
+          this.textures.remove(key);
         }
-        // Bake a circular crop into the texture using canvas 2D
-        const size = 128;
+        // Use native image size — no intermediate downscale step
+        const size = img.naturalWidth || 512;
         const canvas = document.createElement('canvas');
         canvas.width = size;
         canvas.height = size;
         const ctx = canvas.getContext('2d');
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
         ctx.beginPath();
         ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
         ctx.clip();
@@ -820,8 +994,8 @@ export class BattlefieldScene extends Phaser.Scene {
         this.textures.get(key).setFilter(Phaser.Textures.FilterMode.LINEAR);
         resolve(key);
       };
-      img.onerror = () => reject(new Error(`avatar load failed: ${fighter.avatarUrl}`));
-      img.src = fighter.avatarUrl;
+      img.onerror = () => reject(new Error(`avatar load failed: ${avatarUrl}`));
+      img.src = avatarUrl;
     });
   }
 
@@ -851,7 +1025,6 @@ export class BattlefieldScene extends Phaser.Scene {
     circle.destroy();
     label.destroy();
     rt.destroy();
-
     this.textures.get(key).setFilter(Phaser.Textures.FilterMode.LINEAR);
     return key;
   }
@@ -866,7 +1039,7 @@ export class BattlefieldScene extends Phaser.Scene {
     const fighter = {
       id: payload.user_id,
       handle: payload.slack_handle,
-      avatarUrl: payload.user_id ? `/avatars/${payload.user_id}` : null,
+      display_name: payload.display_name ?? null,
       character: payload.character ?? null,
     };
 
@@ -906,9 +1079,13 @@ export class BattlefieldScene extends Phaser.Scene {
     const ftype = (ftypeKey && FIGHTER_TYPES.find(ft => ft.key === ftypeKey))
       ?? FIGHTER_TYPES[Math.abs(Number(fighter.id) || 0) % FIGHTER_TYPES.length];
     // Scale so the visible character (18px of the 100px frame) fills `size` logical px
-    const scale  = size / SPRITE_CHAR_HEIGHT;
-    const legH   = Math.round((SPRITE_CHAR_BOT - SPRITE_HALF_FRAME) * scale);
-    const avatarY = -Math.round((SPRITE_HALF_FRAME - SPRITE_CHAR_TOP) * scale) - 14;
+    const scale     = size / SPRITE_CHAR_HEIGHT;
+    const legH      = Math.round((SPRITE_CHAR_BOT - SPRITE_HALF_FRAME) * scale);
+    const avatarY   = -Math.round((SPRITE_HALF_FRAME - SPRITE_CHAR_TOP) * scale) - 38;
+    const avSize    = avatarPx(size);
+    const fontPx    = handleFontPx(size);
+    const maxChars  = Math.max(8, Math.round(size * 0.22));
+    const displayName = fighter.display_name || fighter.handle || fighter.slack_handle || '';
 
     const container = this.add.container(pos.x, pos.y).setDepth(2);
 
@@ -919,41 +1096,42 @@ export class BattlefieldScene extends Phaser.Scene {
       body.play(ftype.key + '-idle');
     }
     container.add(body);
+    const avatarUrl = fighter.id ? `/avatars/${fighter.id}?v=${Date.now()}` : null;
     const initialKey = this.textures.exists(`fighter-${fighter.id}`)
       ? `fighter-${fighter.id}`
       : this.makeFallbackAvatarTexture(fighter);
-    const head = this.add.image(0, avatarY, initialKey).setDisplaySize(28, 28);
+    const head = this.add.image(0, avatarY, initialKey).setDisplaySize(avSize, avSize);
     container.add(head);
 
     // Handle label (world-space)
     const handle = options.showHandle === false
       ? null
-      : this.addSharpText(pos.x, pos.y + legH + 14, truncateHandle(fighter.handle), {
+      : this.addSharpText(pos.x, pos.y + legH + fontPx, truncateHandle(displayName, maxChars), {
           fontFamily: 'monospace',
-          fontSize: '16px',
+          fontSize: `${fontPx}px`,
           color: '#fbbf24',
         });
 
     this.fighters.set(fighter.id, {
       id: fighter.id,
-      avatarUrl: fighter.avatarUrl ?? null,
       sprite: container,
       body,
       head,
       handle,
-      handleText: fighter.handle ?? '',
+      handleText: displayName,
       pos,
       baseSize: size,
       displaySize: size,
+      avatarSize: avSize,
       legH,
       ftype,
       damageScale: 1,
       animState: 'idle',
     });
 
-    if (initialKey !== `fighter-${fighter.id}`) {
-      this.loadAvatarTexture(fighter).then(realKey => {
-        if (head.scene) head.setTexture(realKey).setDisplaySize(28, 28);
+    if (initialKey !== `fighter-${fighter.id}` && avatarUrl) {
+      this.loadAvatarTexture(fighter.id, avatarUrl).then(realKey => {
+        if (head.scene) head.setTexture(realKey).setDisplaySize(avSize, avSize);
       }).catch(e => console.warn('[battlefield]', e.message));
     }
   }
