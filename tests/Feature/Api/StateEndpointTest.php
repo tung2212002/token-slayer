@@ -20,3 +20,23 @@ test('state endpoint returns current boss, active fighters, and recent log', fun
         ->and(collect($body['fighters'])->pluck('id')->all())->toContain($active->id)->not->toContain($idle->id)
         ->and($body['log'])->toHaveCount(1);
 });
+
+test('state endpoint assigns each fighter a character for the alive boss', function () {
+    $boss = Boss::factory()->create();
+    $user = User::factory()->create(['last_event_at' => now()]);
+
+    $body = $this->getJson('/api/state')->assertOk()->json();
+
+    $fighter = collect($body['fighters'])->firstWhere('id', $user->id);
+    expect($fighter['character'])->toBe($user->characterForBoss($boss->id));
+});
+
+test('state endpoint includes display_name for each fighter', function () {
+    Boss::factory()->create();
+    $user = User::factory()->create(['last_event_at' => now(), 'display_name' => 'Alice']);
+
+    $body = $this->getJson('/api/state')->assertOk()->json();
+
+    $fighter = collect($body['fighters'])->firstWhere('id', $user->id);
+    expect($fighter)->toHaveKey('display_name', 'Alice');
+});
