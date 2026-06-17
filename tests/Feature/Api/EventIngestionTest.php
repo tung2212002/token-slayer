@@ -3,6 +3,7 @@
 use App\Events\BossKilled;
 use App\Events\BossSpawned;
 use App\Events\FighterIdled;
+use App\Events\FighterJoined;
 use App\Events\HitDealt;
 use App\Models\Boss;
 use App\Models\Event;
@@ -180,6 +181,22 @@ test('Stop event killing the boss broadcasts BossKilled then BossSpawned', funct
 
     Illuminate\Support\Facades\Event::assertDispatched(BossKilled::class);
     Illuminate\Support\Facades\Event::assertDispatched(BossSpawned::class);
+});
+
+test('session-start broadcasts FighterJoined with the character for the alive boss', function () {
+    Illuminate\Support\Facades\Event::fake([FighterJoined::class]);
+    $boss = Boss::sole();
+
+    $this->withHeader('Authorization', 'Bearer tok')
+        ->postJson('/api/events', [
+            'hook_event_name' => 'SessionStart',
+            'session_id' => 'sess-join',
+        ])
+        ->assertCreated();
+
+    Illuminate\Support\Facades\Event::assertDispatched(FighterJoined::class, function (FighterJoined $e) use ($boss) {
+        return $e->broadcastWith()['character'] === $this->user->characterForBoss($boss->id);
+    });
 });
 
 test('user-prompt-submit caches the fighter activity', function () {

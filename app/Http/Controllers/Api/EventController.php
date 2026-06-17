@@ -39,24 +39,24 @@ class EventController extends Controller
 
         if ($eventType === 'user-prompt-submit' || $eventType === 'pre-invocation') {
             $this->chargingCache->put($user->id, 'thinking…');
-            $this->dispatchSafely(new FighterCharging($user, 'thinking…'));
+            $this->dispatchSafely(new FighterCharging($user, 'thinking…', $this->aliveBoss()));
         }
 
         if ($eventType === 'pre-tool-use') {
             $activity = $this->summarizeToolUse($payload);
             $this->chargingCache->put($user->id, $activity);
-            $this->dispatchSafely(new FighterCharging($user, $activity));
+            $this->dispatchSafely(new FighterCharging($user, $activity, $this->aliveBoss()));
         }
 
         if ($eventType === 'session-start') {
-            $this->dispatchSafely(new FighterJoined($user));
+            $this->dispatchSafely(new FighterJoined($user, $this->aliveBoss()));
         }
 
         if ($eventType === 'stop') {
             $this->chargingCache->forget($user->id);
 
             if ($tokens > 0) {
-                $boss = Boss::where('status', 'alive')->orderByDesc('number')->first();
+                $boss = $this->aliveBoss();
 
                 Event::create([
                     'user_id' => $user->id,
@@ -85,6 +85,11 @@ class EventController extends Controller
         }
 
         return response()->json(['ok' => true], 201);
+    }
+
+    private function aliveBoss(): ?Boss
+    {
+        return Boss::where('status', 'alive')->orderByDesc('number')->first();
     }
 
     private function normalizeEventType(string $hookName): string
