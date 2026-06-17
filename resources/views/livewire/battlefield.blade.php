@@ -171,12 +171,20 @@
             if (!mount) {
                 return;
             }
-            if (window.__battlefield?.game) {
-                window.__battlefield.game.destroy(true);
-                window.__battlefield = null;
+            const boot = () => {
+                if (window.__battlefield?.game) {
+                    window.__battlefield.game.destroy(true);
+                    window.__battlefield = null;
+                }
+                const state = JSON.parse(mount.dataset.battlefieldState);
+                window.bootBattlefield(mount, state);
+            };
+            // bootBattlefield may not be defined yet if Phaser is still loading
+            if (window.bootBattlefield) {
+                boot();
+            } else {
+                window.__battlefieldModule?.then(boot) ?? boot();
             }
-            const state = JSON.parse(mount.dataset.battlefieldState);
-            window.bootBattlefield(mount, state);
         })();
     </script>
     @endscript
