@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { BOSS_TYPES, FIGHTER_TYPES } from '../../resources/js/battlefield/config.js';
 
-const publicFile = (urlPath) => join(process.cwd(), 'public', urlPath);
+const publicFile = (urlPath) => join(process.cwd(), 'public', urlPath.split('?')[0]);
 
 // PNG dimensions live in the IHDR chunk: width at bytes 16-19, height at 20-23
 function pngSize(path) {
