@@ -295,9 +295,9 @@ export const ATTACK_HANDLERS = {
     for (let i = 0; i < numGhosts; i++) {
       const t      = (i + 1) / (numGhosts + 1);
       const ghostX = fx + towardBoss * dashDist * t;
-      const frame  = fighter.body?.anims?.currentFrame?.textureFrame ?? 0;
+      const frame  = fighter.body?.anims?.currentFrame?.textureFrame ?? `${fighter.ftype.key}-idle-0`;
       scene.time.delayedCall(i * 16, () => {
-        const ghost = scene.add.sprite(ghostX, fy, fighter.ftype.key + '-idle', frame)
+        const ghost = scene.add.sprite(ghostX, fy, 'fighters', frame)
           .setScale(fighter.sprite.scaleX, fighter.sprite.scaleY)
           .setFlipX((towardBoss < 0) !== (fighter.ftype.baseFlipX ?? false))
           .setTint(0xe879f9)
@@ -394,11 +394,11 @@ export const ATTACK_HANDLERS = {
         if (ghostCount < numGhosts && tween.elapsed >= ghostCount * ghostEvery) {
           const curX  = fighter.sprite.x;
           const curY  = fighter.sprite.y;
-          const frame = fighter.body?.anims?.currentFrame?.index ?? 0;
+          const frame = fighter.body?.anims?.currentFrame?.textureFrame ?? `${fighter.ftype.key}-walk-0`;
           const alpha = 0.55 - ghostCount * 0.08;
           const tint  = ghostCount % 2 === 0 ? 0x4c1d95 : 0x7c3aed;
           ghostCount++;
-          const ghost = scene.add.sprite(curX, curY, fighter.ftype.key + '-walk', frame)
+          const ghost = scene.add.sprite(curX, curY, 'fighters', frame)
             .setScale(bodyScale)
             .setFlipX(flipX)
             .setTint(tint)
@@ -450,7 +450,7 @@ export const ATTACK_HANDLERS = {
           const ghostX = dashX + (fx - dashX) * t;
           const ghostY = dashY + (fy - dashY) * t;
           scene.time.delayedCall(i * 30 + 55, () => {
-            const g2 = scene.add.sprite(ghostX, ghostY, fighter.ftype.key + '-idle', 0)
+            const g2 = scene.add.sprite(ghostX, ghostY, 'fighters', `${fighter.ftype.key}-idle-0`)
               .setScale(bodyScale)
               .setFlipX(false)
               .setTint(0x3b0764)
