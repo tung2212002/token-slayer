@@ -11,6 +11,7 @@ class RecapMessage
     private const PROVIDER_LABELS = [
         'claude-code' => 'Claude Code',
         'codex' => 'Codex',
+        'antigravity' => 'Antigravity',
     ];
 
     /**

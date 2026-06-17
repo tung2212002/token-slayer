@@ -7,7 +7,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 uses(RefreshDatabase::class);
 
 test('returns the authed user identity', function () {
-    $user = User::factory()->create(['name' => 'Ada', 'slack_handle' => 'ada']);
+    $user = User::factory()->create(['name' => 'Ada', 'slack_handle' => 'ada', 'display_name' => null]);
     [$plain] = IdeAccessToken::issueBearer($user);
 
     $this->withHeader('Authorization', 'Bearer '.$plain)

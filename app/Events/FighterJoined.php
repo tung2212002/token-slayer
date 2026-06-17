@@ -2,6 +2,7 @@
 
 namespace App\Events;
 
+use App\Models\Boss;
 use App\Models\User;
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
@@ -12,7 +13,7 @@ class FighterJoined implements ShouldBroadcastNow
 {
     use Dispatchable, SerializesModels;
 
-    public function __construct(public User $user) {}
+    public function __construct(public User $user, public ?Boss $boss = null) {}
 
     /**
      * @return array<int, Channel>
@@ -33,10 +34,11 @@ class FighterJoined implements ShouldBroadcastNow
     public function broadcastWith(): array
     {
         return [
-            'user_id' => $this->user->id,
+            'user_id'      => $this->user->id,
             'slack_handle' => $this->user->displayHandle(),
             'display_name' => $this->user->display_name,
-            'avatar_url' => route('avatar', $this->user),
+            'avatar_url'   => route('avatar', $this->user),
+            'character'    => $this->user->characterForBoss($this->boss?->id),
         ];
     }
 }

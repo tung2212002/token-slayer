@@ -38,6 +38,10 @@ class Profile extends Component
                 'baseUrl' => url('/api/events').'?provider=codex',
                 'namespace' => $namespace,
             ])->render(),
+            'antigravitySnippet' => view('partials.antigravity-snippet', [
+                'baseUrl' => url('/api/events'),
+                'namespace' => $namespace,
+            ])->render(),
             'installUrl' => route('install-script'),
             'combinedCommand' => 'curl -fsSL '.route('install-script')." | {$envVar}={$tokenValue} sh",
             'tokenSaveCommand' => "mkdir -p ~/.config/{$namespace} && printf '%s' '{$tokenValue}' > {$tokenPath} && chmod 600 {$tokenPath}",
