@@ -17,7 +17,7 @@ class StateController extends Controller
 
         $fighters = User::where('last_event_at', '>=', $cutoff)
             ->orderByDesc('last_event_at')
-            ->get(['id', 'slack_handle', 'display_name', 'avatar_url', 'last_event_at'])
+            ->get(['id', 'name', 'slack_handle', 'display_name', 'avatar_url', 'last_event_at'])
             ->map(fn (User $u) => array_merge($u->toArray(), [
                 'character' => $u->characterForBoss($boss?->id),
             ]));

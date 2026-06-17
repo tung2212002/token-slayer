@@ -100,10 +100,12 @@ export function createLeaderboard(scene) {
     return createDoomFire(scene, nameX, baseY, i);
   });
 
+  let fireUpdateHandler = null;
   if (!isPortrait) {
-    scene.events.on('update', () => {
+    fireUpdateHandler = () => {
       for (const f of fires) if (f.active) f.tick();
-    });
+    };
+    scene.events.on('update', fireUpdateHandler);
   }
 
   function render() {
@@ -144,6 +146,9 @@ export function createLeaderboard(scene) {
     show() {
       for (const o of allDisplayObjects) o.setVisible(true);
       render();
+    },
+    destroy() {
+      if (fireUpdateHandler) scene.events.off('update', fireUpdateHandler);
     },
   };
 }
@@ -252,27 +257,6 @@ function createDoomFire(scene, nameX, baseY, rank) {
   };
 }
 
-function makePortraitLeaderboard(fighters) {
-  return {
-    seed(entries) {
-      fighters.clear();
-      for (const entry of entries ?? []) {
-        if (entry.damage > 0) {
-          fighters.set(entry.userId, { damage: entry.damage, handle: entry.handle ?? '' });
-        }
-      }
-      emitPortrait(fighters);
-    },
-    onHit(userId, damage, handle) {
-      if (damage <= 0) return;
-      const ex = fighters.get(userId);
-      fighters.set(userId, { damage: (ex?.damage ?? 0) + damage, handle: handle || ex?.handle || '' });
-      emitPortrait(fighters);
-    },
-    reset() { fighters.clear(); emitPortrait(fighters); },
-    getRanked: () => getRankedArray(fighters),
-  };
-}
 
 function emitPortrait(fighters) {
   bus.emit('leaderboard-updated', getRankedArray(fighters).slice(0, 5).map(([userId, dmg, handle]) => ({

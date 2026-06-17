@@ -25,8 +25,13 @@ test('displayHandle falls back to slack_handle when display_name is null', funct
     expect($user->displayHandle())->toBe('alice.smith');
 });
 
-test('displayHandle falls back to #id when both display_name and slack_handle are null', function () {
-    $user = User::factory()->create(['display_name' => null, 'slack_handle' => null]);
+test('displayHandle falls back to name when display_name and slack_handle are null', function () {
+    $user = User::factory()->create(['display_name' => null, 'slack_handle' => null, 'name' => 'Trung']);
+    expect($user->displayHandle())->toBe('Trung');
+});
+
+test('displayHandle falls back to #id when display_name, slack_handle, and name are all empty', function () {
+    $user = User::factory()->create(['display_name' => null, 'slack_handle' => null, 'name' => '']);
     expect($user->displayHandle())->toBe('#'.$user->id);
 });
 

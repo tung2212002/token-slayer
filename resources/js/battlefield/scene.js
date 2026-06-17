@@ -346,6 +346,7 @@ export class BattlefieldScene extends Phaser.Scene {
       for (const [evt, fn] of Object.entries(this._busHandlers)) {
         bus.off(evt, fn);
       }
+      this.leaderboard?.destroy?.();
     });
 
     this.events.emit('ready');
@@ -1123,6 +1124,7 @@ export class BattlefieldScene extends Phaser.Scene {
       baseSize: size,
       displaySize: size,
       avatarSize: avSize,
+      avatarUrl,
       legH,
       ftype,
       damageScale: 1,

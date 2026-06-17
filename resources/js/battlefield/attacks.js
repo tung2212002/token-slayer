@@ -295,7 +295,7 @@ export const ATTACK_HANDLERS = {
     for (let i = 0; i < numGhosts; i++) {
       const t      = (i + 1) / (numGhosts + 1);
       const ghostX = fx + towardBoss * dashDist * t;
-      const frame  = fighter.body?.anims?.currentFrame?.index ?? 0;
+      const frame  = fighter.body?.anims?.currentFrame?.textureFrame ?? 0;
       scene.time.delayedCall(i * 16, () => {
         const ghost = scene.add.sprite(ghostX, fy, fighter.ftype.key + '-idle', frame)
           .setScale(fighter.sprite.scaleX, fighter.sprite.scaleY)
