@@ -804,7 +804,9 @@ export class BattlefieldScene extends Phaser.Scene {
     if (!payload || payload.user_id == null) {
       return;
     }
-    this.clearCharge(payload.user_id);
+    const userId = payload.user_id;
+    this.clearCharge(userId);
+    this.removeFighter(userId);
   }
 
   removeFighter(userId) {
