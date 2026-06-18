@@ -19,7 +19,7 @@ class SlackController extends Controller
             $client = $request->query('client');
             session()->put('ide_oauth', [
                 'state' => $state,
-                'client' => is_string($client) ? $client : 'vscode',
+                'client' => $client === 'jetbrains' ? 'jetbrains' : 'vscode',
             ]);
         }
 
