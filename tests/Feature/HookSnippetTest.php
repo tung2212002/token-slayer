@@ -36,3 +36,18 @@ test('codex snippet calls the helper with PROVIDER=codex', function () {
         ->toContain('session_start')
         ->toContain('stop');
 });
+
+test('antigravity snippet calls the helper with PROVIDER=antigravity', function () {
+    $rendered = view('partials.antigravity-snippet', [
+        'baseUrl' => 'https://app/api/events',
+        'namespace' => 'aiorg',
+    ])->render();
+
+    expect($rendered)
+        ->toContain('PROVIDER=antigravity bash $HOME/.config/aiorg/send-hook.sh')
+        ->toContain('SessionStart')
+        ->toContain('PreInvocation')
+        ->toContain('PreToolUse')
+        ->toContain('PostToolUse')
+        ->toContain('Stop');
+});

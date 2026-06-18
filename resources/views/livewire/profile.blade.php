@@ -16,9 +16,9 @@
         @if ($plainToken)
             <p class="text-sm text-gray-500 mb-1">Your token (shown once):</p>
             <code class="block bg-gray-100 p-2 rounded select-all">{{ $plainToken }}</code>
-            <p class="text-sm text-gray-500 mt-3">The command below installs the Claude Code + Codex CLI hooks and saves this token to <code>{{ $tokenPath }}</code> in one step. Safe to re-run on rotation.</p>
+            <p class="text-sm text-gray-500 mt-3">The command below installs the Claude Code, Codex, and Antigravity CLI hooks and saves this token to <code>{{ $tokenPath }}</code> in one step. Safe to re-run on rotation.</p>
         @else
-            <p class="text-sm text-gray-500 mb-2">Installs Claude Code + Codex CLI hooks and saves your token to <code>{{ $tokenPath }}</code> in one step. Click <em>Regenerate token</em> above to bake a fresh token into the command, or substitute your existing token below.</p>
+            <p class="text-sm text-gray-500 mb-2">Installs Claude Code, Codex, and Antigravity CLI hooks and saves your token to <code>{{ $tokenPath }}</code> in one step. Click <em>Regenerate token</em> above to bake a fresh token into the command, or substitute your existing token below.</p>
         @endif
         <pre class="bg-gray-900 text-gray-100 p-3 rounded overflow-x-auto text-xs select-all">{{ $combinedCommand }}</pre>
         <p class="text-xs text-gray-500 mt-2">Or inspect the script first: <a href="{{ $installUrl }}" class="underline">{{ $installUrl }}</a></p>
@@ -48,6 +48,10 @@
             <div>
                 <p class="text-sm mb-1">3. Append to <code>~/.codex/config.toml</code>:</p>
                 <pre class="bg-gray-900 text-gray-100 p-3 rounded overflow-x-auto text-xs">{{ $codexSnippet }}</pre>
+            </div>
+            <div>
+                <p class="text-sm mb-1">4. Paste/merge into your global <code>~/.gemini/config/hooks.json</code> or project-level <code>.agents/hooks.json</code>:</p>
+                <pre class="bg-gray-900 text-gray-100 p-3 rounded overflow-x-auto text-xs">{{ $antigravitySnippet }}</pre>
             </div>
         </div>
     </details>

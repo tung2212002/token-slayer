@@ -3,6 +3,7 @@
 use App\Events\BossKilled;
 use App\Events\BossSpawned;
 use App\Events\FighterIdled;
+use App\Events\FighterJoined;
 use App\Events\HitDealt;
 use App\Models\Boss;
 use App\Models\Event;
@@ -75,6 +76,29 @@ test('Stop event without inline tokens reads damage from the transcript file', f
 
     expect(Boss::sole()->current_hp)->toBe(800_000)
         ->and(Event::sole()->tokens)->toBe(200_000);
+
+    @unlink($transcript);
+});
+
+test('Stop event without inline tokens reads damage from the Antigravity transcript file', function () {
+    $transcript = tempnam(sys_get_temp_dir(), 'transcript-agy-');
+    file_put_contents($transcript, collect([
+        ['source' => 'USER_EXPLICIT', 'type' => 'USER_INPUT', 'content' => 'hello'],
+        ['source' => 'MODEL', 'type' => 'PLANNER_RESPONSE', 'usage' => ['output_tokens' => 150_000]],
+        ['source' => 'SYSTEM', 'type' => 'TOOL_RESULT', 'content' => 'tool done'],
+        ['source' => 'MODEL', 'type' => 'PLANNER_RESPONSE', 'usage' => ['output_tokens' => 100_000]],
+    ])->map(fn ($e) => json_encode($e))->implode("\n"));
+
+    $this->withHeader('Authorization', 'Bearer tok')
+        ->postJson('/api/events?provider=antigravity', [
+            'hook_event_name' => 'Stop',
+            'session_id' => 'sess-agy-transcript',
+            'transcriptPath' => $transcript,
+        ])
+        ->assertCreated();
+
+    expect(Boss::sole()->current_hp)->toBe(750_000)
+        ->and(Event::sole()->tokens)->toBe(250_000);
 
     @unlink($transcript);
 });
@@ -157,6 +181,22 @@ test('Stop event killing the boss broadcasts BossKilled then BossSpawned', funct
 
     Illuminate\Support\Facades\Event::assertDispatched(BossKilled::class);
     Illuminate\Support\Facades\Event::assertDispatched(BossSpawned::class);
+});
+
+test('session-start broadcasts FighterJoined with the character for the alive boss', function () {
+    Illuminate\Support\Facades\Event::fake([FighterJoined::class]);
+    $boss = Boss::sole();
+
+    $this->withHeader('Authorization', 'Bearer tok')
+        ->postJson('/api/events', [
+            'hook_event_name' => 'SessionStart',
+            'session_id' => 'sess-join',
+        ])
+        ->assertCreated();
+
+    Illuminate\Support\Facades\Event::assertDispatched(FighterJoined::class, function (FighterJoined $e) use ($boss) {
+        return $e->broadcastWith()['character'] === $this->user->characterForBoss($boss->id);
+    });
 });
 
 test('user-prompt-submit caches the fighter activity', function () {
