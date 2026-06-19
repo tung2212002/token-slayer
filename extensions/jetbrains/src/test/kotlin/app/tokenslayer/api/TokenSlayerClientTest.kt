@@ -11,7 +11,7 @@ class TokenSlayerClientTest {
         token: String? = "tok",
         onUnauthorized: () -> Unit = {},
         respond: (String, String, Map<String, String>, String?) -> HttpResult,
-    ) = TokenSlayerClient("https://srv", { token }, onUnauthorized, HttpTransport(respond))
+    ) = TokenSlayerClient({ "https://srv" }, { token }, onUnauthorized, HttpTransport(respond))
 
     @Test fun getSendsBearerAndParsesJson() {
         var seen: Map<String, String> = emptyMap()

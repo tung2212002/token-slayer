@@ -6,7 +6,7 @@ import com.google.gson.JsonParser
 class HttpError(val status: Int, val body: String) : Exception("HTTP $status")
 
 class TokenSlayerClient(
-    private val serverUrl: String,
+    private val serverUrl: () -> String,
     private val getToken: () -> String?,
     private val onUnauthorized: () -> Unit,
     private val transport: HttpTransport,
@@ -22,7 +22,7 @@ class TokenSlayerClient(
         if (body != null) headers["Content-Type"] = "application/json"
         if (authenticated) getToken()?.let { headers["Authorization"] = "Bearer $it" }
 
-        val result = transport.send(method, "$serverUrl$path", headers, body?.toString())
+        val result = transport.send(method, "${serverUrl()}$path", headers, body?.toString())
 
         if (result.status == 401) {
             onUnauthorized()

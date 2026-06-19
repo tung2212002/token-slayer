@@ -36,11 +36,15 @@ class BattlefieldToolWindowFactory : ToolWindowFactory {
             handleRelay(svc, raw) { reload(svc, browser) }
             null
         }
-        // inject window.__tokenSlayerRelay on every load
+        // On every load, expose window.__tokenSlayerRelay and bridge any window 'message'
+        // events to it. The battlefield page is loaded top-level (not in an iframe), so its
+        // postMessage-to-parent lands on this same window — the listener relays it to the plugin.
         browser.jbCefClient.addLoadHandler(object : org.cef.handler.CefLoadHandlerAdapter() {
             override fun onLoadEnd(b: org.cef.browser.CefBrowser?, f: org.cef.browser.CefFrame?, code: Int) {
                 browser.cefBrowser.executeJavaScript(
-                    "window.__tokenSlayerRelay = function(m){ ${relay.inject("m")} };",
+                    "window.__tokenSlayerRelay = function(m){ ${relay.inject("m")} };" +
+                        "if(!window.__tsRelayBound){window.__tsRelayBound=true;" +
+                        "window.addEventListener('message',function(e){try{window.__tokenSlayerRelay(JSON.stringify(e.data));}catch(_){}})}",
                     browser.cefBrowser.url, 0,
                 )
             }
@@ -66,17 +70,24 @@ class BattlefieldToolWindowFactory : ToolWindowFactory {
     }
 
     private fun reload(svc: TokenSlayerService, browser: JBCefBrowser) {
+        // Load the wrapper with the server origin as its base URL so the JCEF document has a
+        // real (non-opaque) origin. Otherwise the embedded battlefield iframe is blocked by the
+        // page's `frame-ancestors` CSP, which never matches a null/opaque ancestor origin.
+        val origin = URI.create(svc.serverUrl).let { "${it.scheme}://${it.authority}" }
+        val baseUrl = "$origin/__ide_embed"
         if (!svc.auth.isSignedIn()) {
-            browser.loadHTML(signedOutHtml())
+            browser.loadHTML(signedOutHtml(), baseUrl)
             return
         }
         try {
             val body = com.google.gson.JsonObject().apply { addProperty("path", "/battlefield?embed=ide") }
             val url = svc.client.postJson("/api/ide/auth/session-url", body).get("url").asString
-            val origin = URI.create(svc.serverUrl).let { "${it.scheme}://${it.authority}" }
-            browser.loadHTML(iframeWrapperHtml(url, origin))
+            // JCEF can host the signed URL directly as the top document — no iframe needed, which
+            // avoids the page's frame-ancestors CSP entirely. The injected message bridge relays
+            // the page's postMessage calls back to the plugin.
+            browser.loadURL(url)
         } catch (e: Exception) {
-            browser.loadHTML(errorHtml(e.message ?: "error"))
+            browser.loadHTML(errorHtml(e.message ?: "error"), baseUrl)
         }
     }
 }

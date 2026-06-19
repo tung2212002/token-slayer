@@ -3,13 +3,16 @@ package app.tokenslayer.auth
 
 import app.tokenslayer.api.TokenSlayerClient
 import com.google.gson.JsonObject
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 import java.security.SecureRandom
 
 class AuthService(
     private val secrets: SecretStore,
     private val client: TokenSlayerClient,
     private val openBrowser: (String) -> Unit,
-    private val serverUrl: String,
+    private val serverUrl: () -> String,
+    private val loopback: LoopbackServer = JdkLoopbackServer(),
 ) {
     private var pendingState: String? = null
     private val listeners = mutableSetOf<(Boolean) -> Unit>()
@@ -26,7 +29,11 @@ class AuthService(
     fun startSignIn() {
         val state = randomHex(32)
         pendingState = state
-        openBrowser("$serverUrl/auth/slack?return=ide&client=jetbrains&state=$state")
+        val port = loopback.start { token, callbackState ->
+            completeSignIn(token, callbackState)
+        }
+        val redirect = URLEncoder.encode("http://127.0.0.1:$port/callback", StandardCharsets.UTF_8)
+        openBrowser("${serverUrl()}/auth/slack?return=ide&client=jetbrains&state=$state&redirect=$redirect")
     }
 
     fun completeSignIn(token: String, state: String) {

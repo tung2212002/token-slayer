@@ -23,7 +23,7 @@ class TokenSlayerService {
     val serverUrl: String get() = TokenSlayerSettings.getInstance().serverUrl
 
     val client: TokenSlayerClient = TokenSlayerClient(
-        serverUrl = serverUrl,
+        serverUrl = { TokenSlayerSettings.getInstance().serverUrl },
         getToken = { auth.token() },
         onUnauthorized = { auth.handleUnauthorized() },
         transport = JdkHttpTransport(),
@@ -33,7 +33,7 @@ class TokenSlayerService {
         secrets = PasswordSafeSecretStore(),
         client = client,
         openBrowser = { BrowserUtil.browse(it) },
-        serverUrl = serverUrl,
+        serverUrl = { TokenSlayerSettings.getInstance().serverUrl },
     )
 
     private val alarm = Alarm(Alarm.ThreadToUse.POOLED_THREAD, ApplicationDisposable)

@@ -14,13 +14,18 @@ class AuthServiceTest {
         override fun clear() { value = null }
     }
 
+    private class FakeLoopback : LoopbackServer {
+        override fun start(onCallback: (String, String) -> Unit): Int = 12345
+        override fun stop() {}
+    }
+
     private fun service(
         store: MemStore = MemStore(),
         opened: MutableList<String> = mutableListOf(),
         respond: (String, String, Map<String, String>, String?) -> HttpResult = { _, _, _, _ -> HttpResult(200, "{}") },
     ): AuthService {
-        val client = TokenSlayerClient("https://srv", { store.get() }, {}, HttpTransport(respond))
-        return AuthService(store, client, { opened.add(it) }, "https://srv")
+        val client = TokenSlayerClient({ "https://srv" }, { store.get() }, {}, HttpTransport(respond))
+        return AuthService(store, client, { opened.add(it) }, { "https://srv" }, FakeLoopback())
     }
 
     @Test fun startSignInOpensBrowserWithClientJetbrains() {

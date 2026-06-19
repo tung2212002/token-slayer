@@ -10,7 +10,7 @@ import kotlin.test.assertTrue
 
 class SnapshotPollerTest {
     private fun poller(body: () -> HttpResult): Pair<SnapshotPoller, MutableList<BridgeMessage>> {
-        val client = TokenSlayerClient("https://srv", { "t" }, {}, HttpTransport { _, _, _, _ -> body() })
+        val client = TokenSlayerClient({ "https://srv" }, { "t" }, {}, HttpTransport { _, _, _, _ -> body() })
         val events = mutableListOf<BridgeMessage>()
         val p = SnapshotPoller(client, schedule = { _, _ -> }, cancel = {})
         p.onBridgeEvent { events.add(it) }
