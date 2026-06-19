@@ -23,7 +23,7 @@ window.addEventListener('message', function (e) {
 
 fun signedOutHtml(): String = """
 <!DOCTYPE html><html><body style="font-family:sans-serif;padding:1rem;color:#e2e8f0;background:#0f172a">
-<h2>token-slayer</h2>
+<h2>Token Slayer</h2>
 <p>Sign in with Slack to see your battlefield, get hit notifications, and install Claude Code hooks.</p>
 <button id="signin" style="padding:.5rem 1rem">Sign in with Slack</button>
 <script>document.getElementById('signin').addEventListener('click',function(){
@@ -33,7 +33,7 @@ fun signedOutHtml(): String = """
 
 fun errorHtml(message: String): String = """
 <!DOCTYPE html><html><body style="font-family:sans-serif;padding:1rem;color:#e2e8f0;background:#0f172a">
-<h3>Couldn't load token-slayer</h3>
+<h3>Couldn't load Token Slayer</h3>
 <p style="color:#f87171">${esc(message)}</p>
 <button id="retry">Retry</button>
 <script>document.getElementById('retry').addEventListener('click',function(){

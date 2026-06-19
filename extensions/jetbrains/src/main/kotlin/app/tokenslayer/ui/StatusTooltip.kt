@@ -11,16 +11,16 @@ data class StatusState(
 )
 
 fun statusText(s: StatusState): String = when {
-    !s.signedIn -> "⚡ token-slayer: sign in"
-    s.connection == "disconnected" -> "⚠ token-slayer"
-    s.connection == "connecting" || s.connection == "reconnecting" -> "↻ token-slayer…"
+    !s.signedIn -> "⚡ Token Slayer: sign in"
+    s.connection == "disconnected" -> "⚠ Token Slayer"
+    s.connection == "connecting" || s.connection == "reconnecting" -> "↻ Token Slayer…"
     s.bossName != null -> "⚡ ${s.bossName}"
-    else -> "⚡ token-slayer"
+    else -> "⚡ Token Slayer"
 }
 
 fun statusTooltip(s: StatusState): String {
-    if (!s.signedIn) return "token-slayer — Signed out\nSign in with Slack to see live boss and fighter data."
-    val sb = StringBuilder("token-slayer — ${connectionLabel(s.connection)}\n")
+    if (!s.signedIn) return "Token Slayer — Signed out\nSign in with Slack to see live boss and fighter data."
+    val sb = StringBuilder("Token Slayer — ${connectionLabel(s.connection)}\n")
     if (s.bossName != null && s.bossCurrentHp != null) {
         val pct = if (s.bossMaxHp > 0) (s.bossCurrentHp * 100 / s.bossMaxHp) else 0
         sb.append("${s.bossName}: $pct% HP (${s.bossCurrentHp} / ${s.bossMaxHp})\n")

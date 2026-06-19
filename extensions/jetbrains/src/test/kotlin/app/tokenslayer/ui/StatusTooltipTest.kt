@@ -6,7 +6,7 @@ import kotlin.test.assertTrue
 class StatusTooltipTest {
     @Test fun signedOutPromptsSignIn() {
         val s = StatusState(signedIn = false)
-        assertTrue(statusText(s).contains("token-slayer", ignoreCase = true))
+        assertTrue(statusText(s).contains("Token Slayer", ignoreCase = true))
         assertTrue(statusTooltip(s).contains("Sign in", ignoreCase = true))
     }
 
@@ -21,7 +21,7 @@ class StatusTooltipTest {
 
     @Test fun disconnectedShownInText() {
         val s = StatusState(signedIn = true, connection = "disconnected")
-        assertTrue(statusText(s).contains("token-slayer", ignoreCase = true))
+        assertTrue(statusText(s).contains("Token Slayer", ignoreCase = true))
         assertTrue(statusTooltip(s).contains("Disconnected", ignoreCase = true))
     }
 }

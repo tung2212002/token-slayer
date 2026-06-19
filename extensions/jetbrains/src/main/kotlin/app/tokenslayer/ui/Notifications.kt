@@ -7,14 +7,14 @@ import com.intellij.openapi.project.Project
 object TokenSlayerNotifications {
     private fun notify(project: Project?, text: String) {
         NotificationGroupManager.getInstance()
-            .getNotificationGroup("token-slayer")
+            .getNotificationGroup("Token Slayer")
             .createNotification(text, NotificationType.INFORMATION)
             .notify(project)
     }
     fun hit(project: Project?, damage: Int, hpAfter: Int, max: Int) =
-        notify(project, "token-slayer: you hit for $damage (boss $hpAfter/$max)")
+        notify(project, "Token Slayer: you hit for $damage (boss $hpAfter/$max)")
     fun bossDefeated(project: Project?, killer: String?) =
-        notify(project, "token-slayer: boss defeated" + (killer?.let { " by @$it" } ?: ""))
+        notify(project, "Token Slayer: boss defeated" + (killer?.let { " by @$it" } ?: ""))
     fun bossSpawned(project: Project?, name: String) =
-        notify(project, "token-slayer: new boss spawned — $name")
+        notify(project, "Token Slayer: new boss spawned — $name")
 }

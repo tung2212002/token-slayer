@@ -95,15 +95,15 @@ class TokenSlayerService {
             val existing = file.read()
             val next = mergeHooks(existing, cfg)
             if (existing.toString() == next.toString()) {
-                Messages.showInfoMessage(project, "token-slayer hooks already up to date.", "token-slayer")
+                Messages.showInfoMessage(project, "Token Slayer hooks already up to date.", "Token Slayer")
                 return
             }
             file.write(next)
-            Messages.showInfoMessage(project, "token-slayer hooks installed in ${file.filePath}", "token-slayer")
+            Messages.showInfoMessage(project, "Token Slayer hooks installed in ${file.filePath}", "Token Slayer")
         } catch (e: InvalidSettingsError) {
-            Messages.showErrorDialog(project, "${e.filePath} is not valid JSON. Fix it and retry.", "token-slayer")
+            Messages.showErrorDialog(project, "${e.filePath} is not valid JSON. Fix it and retry.", "Token Slayer")
         } catch (e: Exception) {
-            Messages.showErrorDialog(project, "install failed (${e.message})", "token-slayer")
+            Messages.showErrorDialog(project, "install failed (${e.message})", "Token Slayer")
         }
     }
 
@@ -111,15 +111,15 @@ class TokenSlayerService {
         val file = SettingsFile()
         try {
             file.write(removeHooks(file.read(), "token_slayer"))
-            Messages.showInfoMessage(project, "token-slayer hooks removed.", "token-slayer")
+            Messages.showInfoMessage(project, "Token Slayer hooks removed.", "Token Slayer")
         } catch (e: Exception) {
-            Messages.showErrorDialog(project, "uninstall failed (${e.message})", "token-slayer")
+            Messages.showErrorDialog(project, "uninstall failed (${e.message})", "Token Slayer")
         }
     }
 
     fun openBattlefield(project: Project?) {
         com.intellij.openapi.wm.ToolWindowManager.getInstance(project ?: return)
-            .getToolWindow("token-slayer")?.activate(null)
+            .getToolWindow("Token Slayer")?.activate(null)
     }
 
     fun openProfile() = BrowserUtil.browse("$serverUrl/profile")

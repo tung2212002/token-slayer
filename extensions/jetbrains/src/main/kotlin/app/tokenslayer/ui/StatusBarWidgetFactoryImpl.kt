@@ -11,7 +11,7 @@ import java.awt.event.MouseEvent
 
 class TokenSlayerStatusWidgetFactory : StatusBarWidgetFactory {
     override fun getId() = "token-slayer.status"
-    override fun getDisplayName() = "token-slayer"
+    override fun getDisplayName() = "Token Slayer"
     override fun createWidget(project: Project): StatusBarWidget = TokenSlayerStatusWidget(project)
 }
 
