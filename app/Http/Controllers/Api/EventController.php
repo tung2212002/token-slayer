@@ -53,7 +53,10 @@ class EventController extends Controller
         }
 
         if ($eventType === 'stop') {
-            $this->chargingCache->forget($user->id);
+            // Trackers that only emit Stop events (claude.ai, cowork) carry no
+            // pre-action signal, so surface a persistent source label as their
+            // charging activity instead of clearing the bubble outright.
+            $activityLabel = $this->providerActivityLabel($provider);
 
             if ($tokens > 0) {
                 $boss = $this->aliveBoss();
@@ -77,9 +80,19 @@ class EventController extends Controller
                 }
 
                 $this->dispatchSafely(new HitDealt($user, $tokens, $result->boss));
+
+                if ($activityLabel !== null) {
+                    // Dispatched after HitDealt: the client clears the charge
+                    // when the attack lands, so re-set the bubble afterwards.
+                    $this->chargingCache->put($user->id, $activityLabel);
+                    $this->dispatchSafely(new FighterCharging($user, $activityLabel, $result->boss));
+                } else {
+                    $this->chargingCache->forget($user->id);
+                }
             } else {
                 // Nothing to damage with — still clear the charging visual
                 // so the fighter doesn't stay stuck mid-charge.
+                $this->chargingCache->forget($user->id);
                 $this->dispatchSafely(new FighterIdled($user));
             }
         }
@@ -90,6 +103,20 @@ class EventController extends Controller
     private function aliveBoss(): ?Boss
     {
         return Boss::where('status', 'alive')->orderByDesc('number')->first();
+    }
+
+    /**
+     * Persistent charging-bubble label for trackers that only emit Stop events
+     * and therefore have no per-action activity to show. Returns null for
+     * providers (e.g. claude-code) whose charging state is managed elsewhere.
+     */
+    private function providerActivityLabel(string $provider): ?string
+    {
+        return match ($provider) {
+            'claude-ai' => 'claude.ai',
+            'cowork' => 'cowork',
+            default => null,
+        };
     }
 
     private function normalizeEventType(string $hookName): string

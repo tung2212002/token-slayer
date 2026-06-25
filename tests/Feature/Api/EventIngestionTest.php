@@ -2,6 +2,7 @@
 
 use App\Events\BossKilled;
 use App\Events\BossSpawned;
+use App\Events\FighterCharging;
 use App\Events\FighterIdled;
 use App\Events\FighterJoined;
 use App\Events\HitDealt;
@@ -284,4 +285,51 @@ test('Stop event from the cowork watcher records the cowork provider and damages
         ->tokens->toBe(40_000)
         ->session_id->toBe('cowork-task-1')
         ->and(Boss::sole()->current_hp)->toBe(960_000);
+});
+
+test('Stop event from the claude.ai tracker shows a persistent source-label bubble', function () {
+    Illuminate\Support\Facades\Event::fake([FighterCharging::class]);
+
+    $this->withHeader('Authorization', 'Bearer tok')
+        ->postJson('/api/events?provider=claude-ai', [
+            'hook_event_name' => 'Stop',
+            'session_id' => 'conv-uuid-1',
+            'tokens' => 50_000,
+        ])
+        ->assertCreated();
+
+    $entry = app(FighterChargingCache::class)->many([$this->user->id])[$this->user->id];
+    expect($entry['activity'])->toBe('claude.ai');
+
+    Illuminate\Support\Facades\Event::assertDispatched(FighterCharging::class, function (FighterCharging $e) {
+        return $e->user->is($this->user) && $e->activity === 'claude.ai';
+    });
+});
+
+test('Stop event from the cowork watcher shows a persistent source-label bubble', function () {
+    $this->withHeader('Authorization', 'Bearer tok')
+        ->postJson('/api/events?provider=cowork', [
+            'hook_event_name' => 'Stop',
+            'session_id' => 'cowork-task-1',
+            'tokens' => 40_000,
+        ])
+        ->assertCreated();
+
+    $entry = app(FighterChargingCache::class)->many([$this->user->id])[$this->user->id];
+    expect($entry['activity'])->toBe('cowork');
+});
+
+test('Stop event from a single-emit tracker with zero tokens still clears the bubble', function () {
+    app(FighterChargingCache::class)->put($this->user->id, 'claude.ai');
+
+    $this->withHeader('Authorization', 'Bearer tok')
+        ->postJson('/api/events?provider=claude-ai', [
+            'hook_event_name' => 'Stop',
+            'session_id' => 'conv-uuid-1',
+            'tokens' => 0,
+        ])
+        ->assertCreated();
+
+    $entry = app(FighterChargingCache::class)->many([$this->user->id])[$this->user->id];
+    expect($entry)->toBeNull();
 });
