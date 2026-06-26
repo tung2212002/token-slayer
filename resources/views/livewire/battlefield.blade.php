@@ -40,22 +40,32 @@
         </a>
     @endunless
 
+    {{-- Mirrors the in-canvas "▸ TOP DAMAGE" leaderboard panel (resources/js/battlefield/leaderboard.js). --}}
     <div
         x-data="battlefieldDamageHud()"
         x-init="init()"
-        class="absolute right-3 top-12 z-10 flex flex-col items-end gap-1 rounded-lg border border-white/10 bg-black/50 px-3 py-2 text-right backdrop-blur-sm"
+        class="absolute right-3 top-12 z-10 w-44 border-2 border-amber-400 bg-[#0b1629]/95 px-3 py-2 font-mono backdrop-blur-sm"
     >
-        <div class="flex items-baseline gap-2">
-            <span class="text-[10px] uppercase tracking-wide text-slate-500">All-time</span>
-            <span class="tabular-nums text-sm font-semibold text-amber-300" x-text="fmt(allTime)"></span>
-        </div>
-        <div class="flex items-baseline gap-2">
-            <span class="text-[10px] uppercase tracking-wide text-slate-500">Monthly</span>
-            <span class="tabular-nums text-xs text-slate-300" x-text="fmt(monthly)"></span>
-        </div>
-        <div class="flex items-baseline gap-2">
-            <span class="text-[10px] uppercase tracking-wide text-slate-500">Daily</span>
-            <span class="tabular-nums text-xs text-slate-300" x-text="fmt(daily)"></span>
+        {{-- corner rivets --}}
+        <span class="pointer-events-none absolute -left-0.5 -top-0.5 h-[5px] w-[5px] bg-amber-400"></span>
+        <span class="pointer-events-none absolute -right-0.5 -top-0.5 h-[5px] w-[5px] bg-amber-400"></span>
+        <span class="pointer-events-none absolute -bottom-0.5 -left-0.5 h-[5px] w-[5px] bg-amber-400"></span>
+        <span class="pointer-events-none absolute -bottom-0.5 -right-0.5 h-[5px] w-[5px] bg-amber-400"></span>
+
+        <div class="text-[13px] font-semibold tracking-wide text-amber-400">▸ DAMAGE</div>
+        <div class="mt-1.5 space-y-1 border-t border-amber-400/40 pt-1.5">
+            <div class="flex items-baseline justify-between gap-3">
+                <span class="text-[11px] uppercase tracking-wide text-slate-400">All-time</span>
+                <span class="tabular-nums text-sm font-semibold text-sky-400" x-text="fmt(allTime)"></span>
+            </div>
+            <div class="flex items-baseline justify-between gap-3">
+                <span class="text-[11px] uppercase tracking-wide text-slate-400">Monthly</span>
+                <span class="tabular-nums text-sm text-sky-400" x-text="fmt(monthly)"></span>
+            </div>
+            <div class="flex items-baseline justify-between gap-3">
+                <span class="text-[11px] uppercase tracking-wide text-slate-400">Daily</span>
+                <span class="tabular-nums text-sm text-sky-400" x-text="fmt(daily)"></span>
+            </div>
         </div>
     </div>
 
