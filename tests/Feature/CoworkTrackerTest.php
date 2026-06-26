@@ -19,6 +19,23 @@ test('cowork watcher posts stop events to the api with the cowork provider', fun
         ->toContain('"Authorization": "Bearer " + token');
 });
 
+test('cowork watcher sends a custom User-Agent so Cloudflare does not block it as a bot', function () {
+    $script = $this->get('/cowork-watcher.py')->getContent();
+
+    // urllib's default "Python-urllib" agent is rejected with 403 by Cloudflare.
+    expect($script)->toContain('"User-Agent"');
+});
+
+test('cowork watcher only advances the offset after a successful report', function () {
+    $script = $this->get('/cowork-watcher.py')->getContent();
+
+    // A failed POST (403/5xx) must keep the offset so the tokens are retried,
+    // not silently dropped.
+    expect($script)
+        ->toContain('status = report(')
+        ->toContain('200 <= status < 300');
+});
+
 test('cowork watcher reads exact output tokens from agent-mode transcripts', function () {
     $script = $this->get('/cowork-watcher.py')->getContent();
 
@@ -44,7 +61,7 @@ test('cowork watcher baselines existing transcripts before dealing damage', func
 
     expect($script)
         ->toContain('_baselined')
-        ->toContain('if not baselining and tokens > 0:');
+        ->toContain('baselining or tokens == 0');
 });
 
 test('cowork watcher reads the token from the shared hook token file', function () {

@@ -67,10 +67,10 @@
         </div>
         <p class="text-sm text-gray-500 mb-3">For anyone chatting on <a href="https://claude.ai" target="_blank" rel="noopener" class="underline">claude.ai</a> or in the Claude Desktop app (e.g. marketing). No terminal needed. Counts your chats as boss damage (estimated from reply length).</p>
         <ol class="text-sm text-gray-600 list-decimal ml-5 space-y-1.5">
-            <li>Install <a href="https://www.tampermonkey.net/" target="_blank" rel="noopener" class="underline">Tampermonkey</a> (or Violentmonkey) in your browser.</li>
+            <li>Install <a href="https://chromewebstore.google.com/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo" target="_blank" rel="noopener" class="underline">Tampermonkey</a> (or Violentmonkey) in your browser.</li>
             <li><span class="font-medium">Chrome 138+ only:</span> open <code>chrome://extensions</code> → Tampermonkey → <em>Details</em> → turn on <span class="font-medium">Allow user scripts</span>. Without this the tracker installs but never runs.</li>
             <li><a href="{{ $userscriptUrl }}" class="underline">Install the tracker userscript</a> — your userscript manager will prompt you.</li>
-            <li>Open <a href="https://claude.ai" target="_blank" rel="noopener" class="underline">claude.ai</a> and paste your token when asked (once).</li>
+            <li>Open <a href="https://claude.ai" target="_blank" rel="noopener" class="underline">claude.ai</a>, prompt something, and wait a few minutes to paste your token when asked (once).</li>
         </ol>
         <p class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5 mt-3">
             <span class="font-medium">Note:</span> Claude Desktop chats are tracked only while <a href="https://claude.ai" target="_blank" rel="noopener" class="underline">claude.ai</a> is open in this browser (picked up on the userscript's ~1-min sync). Chats in the browser tab itself register within seconds.

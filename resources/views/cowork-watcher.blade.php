@@ -128,6 +128,9 @@ def report(token, session_id, tokens):
         headers={
             "Authorization": "Bearer " + token,
             "Content-Type": "application/json",
+            # Cloudflare blocks the default "Python-urllib" agent as a bot (403),
+            # so send an explicit User-Agent or reports never reach the server.
+            "User-Agent": "token-slayer-cowork/1.0",
         },
     )
     try:
@@ -150,10 +153,17 @@ def main():
     baselining = not state.get("_baselined", False)
 
     for path in transcript_paths():
-        tokens, new_offset = process_file(path, state.get(path, 0))
-        state[path] = new_offset
-        if not baselining and tokens > 0:
-            report(token, session_id_for(path), tokens)
+        offset = state.get(path, 0)
+        tokens, new_offset = process_file(path, offset)
+        if baselining or tokens == 0:
+            state[path] = new_offset
+            continue
+        status = report(token, session_id_for(path), tokens)
+        # Only advance past these bytes once the server has accepted them.
+        # Otherwise keep the old offset so the next run retries instead of
+        # silently dropping the tokens (e.g. a transient 5xx or 403).
+        if status is not None and 200 <= status < 300:
+            state[path] = new_offset
 
     state["_baselined"] = True
     save_state(state)
