@@ -34,12 +34,15 @@ final class DamageTotals
      */
     public function forUser(User $user): array
     {
-        $base = Event::where('user_id', $user->id);
-
         return [
-            'allTime' => (int) (clone $base)->sum('tokens'),
-            'monthly' => (int) (clone $base)->where('created_at', '>=', now()->subDays(30))->sum('tokens'),
-            'daily' => (int) (clone $base)->where('created_at', '>=', now()->subDay())->sum('tokens'),
+            'allTime' => (int) $this->forUserQuery($user)->sum('tokens'),
+            'monthly' => (int) $this->forUserQuery($user)->where('created_at', '>=', now()->subDays(30))->sum('tokens'),
+            'daily' => (int) $this->forUserQuery($user)->where('created_at', '>=', now()->subDay())->sum('tokens'),
         ];
+    }
+
+    private function forUserQuery(User $user): \Illuminate\Database\Eloquent\Builder
+    {
+        return Event::where('user_id', $user->id);
     }
 }
