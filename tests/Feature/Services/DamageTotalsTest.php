@@ -71,3 +71,9 @@ test('global is cached so a later event is not reflected until the cache expires
 test('totals are zero when no events exist', function () {
     expect($this->totals->global())->toBe(['allTime' => 0, 'monthly' => 0, 'daily' => 0]);
 });
+
+test('forUser returns zero totals when the user has no events', function () {
+    $user = User::factory()->create();
+
+    expect($this->totals->forUser($user))->toBe(['allTime' => 0, 'monthly' => 0, 'daily' => 0]);
+});

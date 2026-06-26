@@ -6,7 +6,7 @@ use App\Models\Event;
 use App\Models\User;
 use Illuminate\Support\Facades\Cache;
 
-class DamageTotals
+final class DamageTotals
 {
     private const CACHE_KEY = 'damage-totals:global';
 
