@@ -244,7 +244,7 @@
                     const parent = (this.$el.offsetParent || document.body).getBoundingClientRect();
                     const scale = rect.width / logicalW;
                     const LOGICAL_X = 12; // mirrors the panel's left inset
-                    const LOGICAL_Y = 56; // sits just below the profile link
+                    const LOGICAL_Y = 5;  // align top with the TOP DAMAGE panel (PANEL_TOP)
                     this.$el.style.transformOrigin = 'top left';
                     this.$el.style.left = (rect.left - parent.left + LOGICAL_X * scale) + 'px';
                     this.$el.style.top = (rect.top - parent.top + LOGICAL_Y * scale) + 'px';
