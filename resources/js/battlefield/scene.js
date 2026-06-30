@@ -82,8 +82,16 @@ export class BattlefieldScene extends Phaser.Scene {
       );
     }
     for (const boss of BOSS_TYPES) {
-      if (!this.textures.exists(boss.key))
-        this.load.spritesheet(boss.key, boss.file, { frameWidth: boss.frameWidth, frameHeight: boss.frameHeight });
+      if (boss.animFiles) {
+        for (const [anim, info] of Object.entries(boss.animFiles)) {
+          const texKey = `${boss.key}-${anim}`;
+          if (!this.textures.exists(texKey))
+            this.load.spritesheet(texKey, info.file, { frameWidth: info.frameWidth, frameHeight: info.frameHeight });
+        }
+      } else {
+        if (!this.textures.exists(boss.key))
+          this.load.spritesheet(boss.key, boss.file, { frameWidth: boss.frameWidth, frameHeight: boss.frameHeight });
+      }
     }
     if (!this.textures.exists('fireball'))
       this.load.spritesheet('fireball', '/assets/battlefield/fx/fireball.png', { frameWidth: 16, frameHeight: 16 });
@@ -94,7 +102,12 @@ export class BattlefieldScene extends Phaser.Scene {
     this.load.on('progress', v => { if (loaderBar) loaderBar.style.width = Math.round(v * 100) + '%'; });
     this.load.on('complete', () => {
       if (loader) loader.style.display = 'none';
-      const pixelArtKeys = [...BOSS_TYPES.filter(b => b.pixelArt !== false).map(b => b.key), 'fireball', 'explosion'];
+      const pixelArtKeys = [
+        ...BOSS_TYPES.filter(b => b.pixelArt !== false).flatMap(b =>
+          b.animFiles ? Object.keys(b.animFiles).map(anim => `${b.key}-${anim}`) : [b.key]
+        ),
+        'fireball', 'explosion',
+      ];
       for (const key of pixelArtKeys) {
         this.textures.get(key).setFilter(Phaser.Textures.FilterMode.NEAREST);
       }
@@ -160,6 +173,24 @@ export class BattlefieldScene extends Phaser.Scene {
   ensureBossIdleAnim(textureKey) {
     const bossType = BOSS_TYPES.find(b => b.key === textureKey);
     const idleKey = `${textureKey}-idle`;
+
+    if (bossType?.animFiles) {
+      for (const [anim, info] of Object.entries(bossType.animFiles)) {
+        const animKey = `${textureKey}-${anim}`;
+        const texKey  = `${textureKey}-${anim}`;
+        if (!this.anims.exists(animKey)) {
+          this.anims.create({
+            key: animKey,
+            frames: this.anims.generateFrameNumbers(texKey, { start: 0, end: info.count - 1 }),
+            frameRate: info.rate ?? 8,
+            repeat: (anim === 'idle' || anim === 'move') ? -1 : 0,
+            yoyo: info.yoyo ?? false,
+          });
+        }
+      }
+      return idleKey;
+    }
+
     if (!this.anims.exists(idleKey)) {
       this.anims.create({
         key: idleKey,
@@ -193,18 +224,44 @@ export class BattlefieldScene extends Phaser.Scene {
         repeat: -1,
       });
     }
+    if (bossType?.deathStart != null && !this.anims.exists(`${textureKey}-death`)) {
+      this.anims.create({
+        key: `${textureKey}-death`,
+        frames: this.anims.generateFrameNumbers(textureKey, { start: bossType.deathStart, end: bossType.deathEnd }),
+        frameRate: bossType.deathFrameRate ?? 8,
+        repeat: 0,
+      });
+    }
+    if (bossType?.hurtStart != null && !this.anims.exists(`${textureKey}-hurt`)) {
+      this.anims.create({
+        key: `${textureKey}-hurt`,
+        frames: this.anims.generateFrameNumbers(textureKey, { start: bossType.hurtStart, end: bossType.hurtEnd }),
+        frameRate: bossType.hurtFrameRate ?? 10,
+        repeat: 0,
+      });
+    }
     return idleKey;
   }
 
   playBossReact() {
     if (!this.bossSprite?.active) return;
-    const key = this.bossSprite.texture?.key;
+    const key = this.bossSprite.getData('bossTypeKey') ?? this.bossSprite.texture?.key;
+    const hurtKey  = `${key}-hurt`;
     const attackKey = `${key}-attack`;
-    if (!this.anims.exists(attackKey)) return;
-    this.bossSprite.play(attackKey);
+    const hasHurt = this.anims.exists(hurtKey);
+    const reactKey = hasHurt ? hurtKey : attackKey;
+    if (!this.anims.exists(reactKey)) return;
+    const now = this.time.now;
+    const cooldown = hasHurt ? 2000 : 8000;
+    if ((now - (this.bossLastAttackAt ?? 0)) < cooldown) return;
+    if (this.bossSprite.anims.currentAnim?.key === reactKey) return;
+    this.bossLastAttackAt = now;
+    this.bossSprite.play(reactKey);
     this.bossSprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
       if (!this.bossSprite?.active) return;
-      const resumeKey = this.anims.exists(`${key}-move`) ? `${key}-move` : `${key}-idle`;
+      const resumeKey = (this.bossPatrolPhase === 'move' && this.anims.exists(`${key}-move`))
+        ? `${key}-move`
+        : `${key}-idle`;
       this.bossSprite.play(resumeKey);
     });
   }
@@ -212,28 +269,79 @@ export class BattlefieldScene extends Phaser.Scene {
   startBossPatrol() {
     const range = 120;
     const sprite = this.bossSprite;
+    const anchorX = this.layout.boss.anchor.x;
     const anchorY = this.layout.boss.anchor.y;
-    const leftX = this.layout.boss.anchor.x - range / 2;
-    const rightX = this.layout.boss.anchor.x + range / 2;
-    sprite.x = leftX;
+    const bossTypeKey = sprite.getData('bossTypeKey') ?? sprite.texture?.key;
+    const bossType = BOSS_TYPES.find(b => b.key === bossTypeKey);
+    const moveKey = `${bossTypeKey}-move`;
+    const idleKey = `${bossTypeKey}-idle`;
+    const attackKey = `${bossTypeKey}-attack`;
+    let goingRight = true;
+
+    const startIdleBreath = (breathCount, onDone) => {
+      if (!sprite?.active) return;
+      sprite.play(idleKey);
+      let count = 0;
+      const onRepeat = () => {
+        if (sprite.anims.currentAnim?.key !== idleKey) return;
+        count++;
+        if (count >= breathCount) {
+          sprite.off(Phaser.Animations.Events.ANIMATION_REPEAT, onRepeat);
+          this.bossIdleRepeatListener = null;
+          onDone();
+        }
+      };
+      this.bossIdleRepeatListener = onRepeat;
+      sprite.on(Phaser.Animations.Events.ANIMATION_REPEAT, onRepeat);
+    };
+
+    const idleAtEndpoint = (onDone) => {
+      this.bossPatrolPhase = 'idle';
+      const canAttack = this.anims.exists(attackKey)
+        && !sprite.anims.currentAnim?.key.includes('-attack')
+        && Math.random() < 0.25;
+      if (canAttack) {
+        startIdleBreath(2, () => {
+          if (!sprite?.active || this.bossPatrolPhase !== 'idle') return;
+          sprite.play(attackKey);
+          sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
+            if (!sprite?.active || this.bossPatrolPhase !== 'idle') return;
+            this._bossSwipeHit(sprite.x, bossType);
+            onDone();
+          });
+        });
+      } else {
+        startIdleBreath(2, onDone);
+      }
+    };
+
+    const doStep = () => {
+      if (!sprite?.active) return;
+      if (this.bossIdleRepeatListener) {
+        sprite.off(Phaser.Animations.Events.ANIMATION_REPEAT, this.bossIdleRepeatListener);
+        this.bossIdleRepeatListener = null;
+      }
+      const targetX = goingRight ? anchorX + range / 2 : anchorX - range / 2;
+      sprite.setFlipX(goingRight);
+      if (this.anims.exists(moveKey)) sprite.play(moveKey);
+      this.bossPatrolPhase = 'move';
+      this.tweens.add({
+        targets: sprite,
+        x: targetX,
+        duration: 1800,
+        ease: 'Sine.easeInOut',
+        onComplete: () => {
+          if (!sprite?.active) return;
+          goingRight = !goingRight;
+          idleAtEndpoint(doStep);
+        },
+      });
+    };
+
+    sprite.x = anchorX - range / 2;
     sprite.setFlipX(true);
-    const bossType = BOSS_TYPES.find(b => b.key === sprite.texture?.key);
-    const moveKey = `${sprite.texture?.key}-move`;
-    if (this.anims.exists(moveKey) && sprite.anims.currentAnim?.key !== moveKey) {
-      const anim = this.anims.get(moveKey);
-      // Start from last frame so yoyo begins by sinking — avoids jump from idle (frame 19) to move start (frame 4)
-      sprite.play({ key: moveKey, startFrame: anim ? anim.frames.length - 1 : 0 });
-    }
-    this.tweens.add({
-      targets: sprite,
-      x: rightX,
-      duration: 2400,
-      ease: 'Sine.easeInOut',
-      yoyo: true,
-      repeat: -1,
-      onYoyo: () => sprite.setFlipX(false),
-      onRepeat: () => sprite.setFlipX(true),
-    });
+    doStep();
+
     if (bossType?.float) {
       const { amplitude, duration } = bossType.float;
       sprite.y = anchorY;
@@ -246,6 +354,91 @@ export class BattlefieldScene extends Phaser.Scene {
         repeat: -1,
       });
     }
+  }
+
+  // Checks fighters near bossX and applies stun visual to those in melee range.
+  _bossSwipeHit(bossX, bossType) {
+    const bossHalfW = bossType
+      ? ((bossType.animFiles ? bossType.animFiles.idle.frameWidth : (bossType.frameWidth ?? 32))
+          * (bossType.scale ?? 1)) / 2
+      : 64;
+    const hitRange = bossHalfW + 20;
+
+    for (const entry of this.fighters.values()) {
+      if (!entry.sprite?.active) continue;
+      if (Math.abs(entry.sprite.x - bossX) <= hitRange) {
+        this._applyStunEffect(entry);
+      }
+    }
+  }
+
+  _applyStunEffect(entry) {
+    if (!entry.sprite?.active) return;
+    // Per-fighter cooldown — skip if stunned in the last 3 s
+    const now = this.time.now;
+    if (entry.lastStunAt && now - entry.lastStunAt < 3000) return;
+    entry.lastStunAt = now;
+
+    // Red tint flash on body sprite (Container doesn't support setTint)
+    if (entry.body?.active) entry.body.setTint(0xff2222);
+    this.time.delayedCall(500, () => {
+      if (entry.body?.active) entry.body.clearTint();
+    });
+
+    // Brief camera shake on hit
+    this.cameras.main.shake(180, 0.004);
+
+    // Elliptical orbit stars around the character's actual head (not avatar bubble).
+    // Flat ellipse (rx >> ry) looks like a parabolic halo from the side.
+    // Depth-sorted each tick: arc over the top = in front, arc under = behind.
+    const bScale  = (entry.displaySize ?? 45) / 18;
+    const headOffY = -Math.round(12 * bScale);
+    const rx      = Math.round(bScale * 10);
+    const ry      = Math.round(bScale * 3.5);
+    const N       = 6;
+    const period  = 2800;
+    const total   = 3000;
+
+    const stunStars = [];
+    for (let i = 0; i < N; i++) {
+      const phase = (i / N) * Math.PI * 2;
+      const s = this.add.text(0, 0, '★', {
+        fontFamily: 'Arial, sans-serif', fontSize: '11px',
+        color: '#fbbf24', stroke: '#78350f', strokeThickness: 2,
+      }).setOrigin(0.5).setDepth(112);
+      stunStars.push({ text: s, phase });
+    }
+
+    const startAt = this.time.now;
+    const ticker = this.time.addEvent({
+      delay: 16,
+      loop: true,
+      callback: () => {
+        const elapsed = this.time.now - startAt;
+        const baseAngle = (elapsed / period) * Math.PI * 2;
+        const fadeStart = total * 0.75;
+        const alpha     = elapsed > fadeStart ? 1 - (elapsed - fadeStart) / (total - fadeStart) : 1;
+
+        // Follow fighter live position
+        const cs  = entry.sprite?.scaleX ?? 1;
+        const cx  = entry.sprite?.x ?? 0;
+        const cy  = (entry.sprite?.y ?? 0) + headOffY * cs;
+
+        for (const star of stunStars) {
+          const a    = baseAngle + star.phase;
+          const sinA = Math.sin(a);
+          star.text.setPosition(cx + Math.cos(a) * rx, cy + sinA * ry);
+          star.text.setDepth(sinA < 0 ? 112 : 1);
+          star.text.setScale(sinA < 0 ? 1 : 0.65);
+          star.text.setAlpha(alpha);
+        }
+
+        if (elapsed >= total) {
+          ticker.remove();
+          stunStars.forEach(s => s.text.destroy());
+        }
+      },
+    });
   }
 
   create() {
@@ -264,12 +457,17 @@ export class BattlefieldScene extends Phaser.Scene {
 
     const initialType = this.bossTypeFor(state.boss.number);
     const initialKey = initialType.key;
+    const initialTexKey = initialType.animFiles ? `${initialKey}-idle` : initialKey;
     const initialAnim = this.ensureBossIdleAnim(initialKey);
     this.bossSprite = this.add
-      .sprite(L.boss.anchor.x, L.boss.anchor.y, initialKey)
+      .sprite(L.boss.anchor.x, L.boss.anchor.y, initialTexKey)
       .setScale(initialType.scale)
       .setDepth(5)
+      .setData('bossTypeKey', initialKey)
       .play(initialAnim);
+    if (initialType.pixelate) {
+      this.bossSprite.preFX?.addPixelate(initialType.pixelate);
+    }
     this.startBossPatrol();
 
     this.bossNameText = this.addSharpText(L.boss.name.x, L.boss.name.y, this.bossLabel(state.boss), {
@@ -310,15 +508,21 @@ export class BattlefieldScene extends Phaser.Scene {
 
     this.fighters = new Map();
     this.damageTotals = new Map();
+    this.currentUserId = state.currentUserId ?? null;
     const config = fighterDisplayConfig(state.fighters.length, this.mode);
-    const positions = computeFighterPositions(
+    const autoPositions = computeFighterPositions(
       state.fighters.length,
       L.fighters.rowXRange,
       config.topY,
       config.perRow,
       config.rowSpacing,
     );
-    state.fighters.forEach((f, i) => this.addFighter(f, positions[i], config));
+    state.fighters.forEach((f, i) => {
+      const pos = f.position
+        ? { x: f.position.x * this.layout.logicalWidth, y: f.position.y * this.layout.logicalHeight }
+        : autoPositions[i];
+      this.addFighter(f, pos, config);
+    });
 
     // Restore damage-based fighter sizes captured by snapshotState on reboot
     for (const [userId, damage] of state.damageTotals ?? []) {
@@ -346,7 +550,10 @@ export class BattlefieldScene extends Phaser.Scene {
       'fighter-charging': payload => this.handleCharging(payload),
       'fighter-idled': payload => this.handleIdled(payload),
       'fighter-joined': payload => this.handleFighterJoined(payload),
+      'fighter-moved': payload => this.handleFighterMoved(payload),
     };
+
+    this._setupMoveInput();
     for (const [evt, fn] of Object.entries(this._busHandlers)) {
       bus.on(evt, fn);
     }
@@ -528,6 +735,10 @@ export class BattlefieldScene extends Phaser.Scene {
     if (!payload || payload.boss_number == null || payload.max_hp == null) {
       return;
     }
+    this.bossLastAttackAt = 0;
+    this.bossPatrolTween = null;
+    this.bossPatrolPhase = 'move';
+    this.bossIdleRepeatListener = null;
     this.clearAllCharges();
     const L = this.layout;
     const oldSprite = this.bossSprite;
@@ -540,17 +751,22 @@ export class BattlefieldScene extends Phaser.Scene {
     });
 
     const bossType = this.bossTypeFor(payload.boss_number);
-    const textureKey = bossType.key;
-    const idleKey = this.ensureBossIdleAnim(textureKey);
-    const spawnKey = `${textureKey}-spawn`;
+    const typeKey   = bossType.key;
+    const texKey    = bossType.animFiles ? `${typeKey}-idle` : typeKey;
+    const idleKey   = this.ensureBossIdleAnim(typeKey);
+    const spawnKey  = `${typeKey}-spawn`;
 
     if (this.anims.exists(spawnKey)) {
       // Shadow: rise from ground in place — no drop tween
       this.bossSprite = this.add
-        .sprite(L.boss.anchor.x, L.boss.anchor.y, textureKey)
+        .sprite(L.boss.anchor.x, L.boss.anchor.y, texKey)
         .setScale(bossType.scale)
         .setDepth(5)
+        .setData('bossTypeKey', typeKey)
         .play(spawnKey);
+      if (bossType.pixelate) {
+        this.bossSprite.preFX?.addPixelate(bossType.pixelate);
+      }
       this.bossSprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
         if (this.bossSprite?.active) {
           this.bossSprite.play(idleKey);
@@ -560,10 +776,14 @@ export class BattlefieldScene extends Phaser.Scene {
     } else {
       // Other bosses: drop from above with bounce
       this.bossSprite = this.add
-        .sprite(L.boss.anchor.x, -40, textureKey)
+        .sprite(L.boss.anchor.x, -40, texKey)
         .setScale(bossType.scale)
         .setDepth(5)
+        .setData('bossTypeKey', typeKey)
         .play(idleKey);
+      if (bossType.pixelate) {
+        this.bossSprite.preFX?.addPixelate(bossType.pixelate);
+      }
       this.tweens.add({
         targets: this.bossSprite,
         y: L.boss.anchor.y,
@@ -595,14 +815,31 @@ export class BattlefieldScene extends Phaser.Scene {
   handleBossKilled(payload = {}) {
     this.clearAllCharges();
     if (this.bossSprite) {
-      this.tweens.add({
-        targets: this.bossSprite,
-        scale: 0,
-        alpha: 0,
-        angle: 360,
-        duration: TIMINGS.bossKilledMs,
-        ease: 'Quad.easeIn',
-      });
+      this.tweens.killTweensOf(this.bossSprite);
+      const bossType = this.bossTypeFor(this.bossState?.number ?? 0);
+      const deathKey = `${bossType.key}-death`;
+      if (this.anims.exists(deathKey)) {
+        const dyingSprite = this.bossSprite;
+        dyingSprite.play(deathKey);
+        dyingSprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
+          if (!dyingSprite?.active) return;
+          this.tweens.add({
+            targets: dyingSprite,
+            alpha: 0,
+            duration: 300,
+            ease: 'Quad.easeIn',
+          });
+        });
+      } else {
+        this.tweens.add({
+          targets: this.bossSprite,
+          scale: 0,
+          alpha: 0,
+          angle: 360,
+          duration: TIMINGS.bossKilledMs,
+          ease: 'Quad.easeIn',
+        });
+      }
       this.cameras.main.flash(400, 255, 255, 255);
     }
     if (this.leaderboard) {
@@ -751,7 +988,7 @@ export class BattlefieldScene extends Phaser.Scene {
   activityBubbleY(fighter) {
     const avatarRelY  = fighter.head?.y ?? 0;
     const avatarRadius = (fighter.head?.displayHeight ?? 28) / 2;
-    return fighter.pos.y + avatarRelY - avatarRadius - 28;
+    return (fighter.sprite?.y ?? fighter.pos.y) + avatarRelY - avatarRadius - 28;
   }
 
   updateActivityBubble(entry, fighter, activity) {
@@ -768,7 +1005,7 @@ export class BattlefieldScene extends Phaser.Scene {
       const bubbleY  = this.activityBubbleY(fighter);
       const fontPx   = Math.max(9, Math.round(fighter.displaySize * 0.22));
       const maxChars = Math.max(12, Math.round(fighter.displaySize * 0.35));
-      entry.bubble = this.createActivityBubble(fighter.pos.x, bubbleY, activity, fontPx, maxChars);
+      entry.bubble = this.createActivityBubble(fighter.sprite?.x ?? fighter.pos.x, bubbleY, activity, fontPx, maxChars);
     }
     // The hover tooltip takes priority over the activity bubble.
     if (this.hoveredUserId === fighter.id) {
@@ -803,6 +1040,11 @@ export class BattlefieldScene extends Phaser.Scene {
         text.y = newY;
         bg.x = newX;
         bg.y = newY;
+      },
+      tweenTo: (scene, newX, newY, duration) => {
+        scene.tweens.killTweensOf(text);
+        scene.tweens.killTweensOf(bg);
+        scene.tweens.add({ targets: [text, bg], x: newX, y: newY, duration, ease: 'Linear' });
       },
       setVisible: visible => {
         text.setVisible(visible);
@@ -1266,5 +1508,484 @@ export class BattlefieldScene extends Phaser.Scene {
         if (head.scene) head.setTexture(realKey).setDisplaySize(avSize, avSize);
       }).catch(e => console.warn('[battlefield]', e.message));
     }
+  }
+
+  handleFighterMoved(payload) {
+    if (!payload || payload.user_id == null) {
+      return;
+    }
+    const entry = this.fighters.get(payload.user_id);
+    if (!entry) {
+      return;
+    }
+    // Skip server echo while local waypoint animation is in progress for own fighter
+    if (entry.waypointMoving && payload.user_id === this.currentUserId) {
+      return;
+    }
+
+    const target = {
+      x: payload.x * this.layout.logicalWidth,
+      y: payload.y * this.layout.logicalHeight,
+    };
+
+    const dx = target.x - entry.sprite.x;
+    const dy = target.y - entry.sprite.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const SPEED_PX_PER_SEC = 300;
+    const duration = Math.max(200, Math.round((dist / SPEED_PX_PER_SEC) * 1000));
+
+    // Flip toward movement direction; fall back to boss-facing when barely horizontal
+    const flipX = dx < -5 ? true : (dx > 5 ? false : target.x > this.layout.boss.anchor.x);
+
+    // Start walk animation (unless mid-attack)
+    if (entry.body && entry.animState !== 'attack' && entry.ftype) {
+      entry.animState = 'walk';
+      entry.body.setFlipX(flipX);
+      entry.body.play(entry.ftype.key + '-walk', true);
+    }
+
+    // Kill any in-progress move tweens before starting new ones
+    this.tweens.killTweensOf(entry.sprite);
+    if (entry.handle) {
+      this.tweens.killTweensOf(entry.handle);
+    }
+
+    this.tweens.add({
+      targets: entry.sprite,
+      x: target.x,
+      y: target.y,
+      duration,
+      ease: 'Linear',
+      onComplete: () => {
+        if (entry.body && entry.animState !== 'attack') {
+          const isCharging = this.charges.has(payload.user_id);
+          const next = isCharging ? 'walk' : 'idle';
+          entry.animState = next;
+          entry.body.setFlipX(next === 'walk' ? target.x > this.layout.boss.anchor.x : false);
+          entry.body.play(entry.ftype.key + '-' + next, true);
+        }
+        entry.pos = target;
+      },
+    });
+
+    if (entry.handle) {
+      const scale  = entry.sprite.scaleX;
+      const fontPx = handleFontPx(entry.displaySize);
+      this.tweens.add({
+        targets: entry.handle,
+        x: target.x,
+        y: target.y + entry.legH * scale + fontPx,
+        duration,
+        ease: 'Linear',
+      });
+    }
+
+    const charge = this.charges.get(payload.user_id);
+    if (charge) {
+      if (charge.trail?.scene) {
+        this.tweens.killTweensOf(charge.trail);
+        const tb = target.x <= this.layout.boss.anchor.x ? 1 : -1;
+        const cb = Math.round(entry.displaySize / 3);
+        this.tweens.add({
+          targets: charge.trail,
+          x: target.x - tb * Math.round(entry.displaySize * 0.18),
+          y: target.y + cb - Math.round(entry.displaySize * 0.12),
+          duration,
+          ease: 'Linear',
+        });
+      }
+      if (charge.bubble) {
+        const avatarRelY   = entry.head?.y ?? 0;
+        const avatarRadius = (entry.head?.displayHeight ?? 28) / 2;
+        charge.bubble.tweenTo(this, target.x, target.y + avatarRelY - avatarRadius - 16, duration);
+      }
+    }
+  }
+
+  _drawChevron(g, ax, ay, px, py, color, alpha, s = 1) {
+    // Arrowhead with a notch cut into the back — looks like the LoL click indicator
+    // ax/ay = unit vector toward tip, px/py = perpendicular
+    const TIP   = 7  * s;
+    const BODY  = 4.5 * s;
+    const HALF  = 4  * s;
+    const NOTCH = 1.8 * s;
+    g.fillStyle(color, alpha);
+    g.fillPoints([
+      { x:  ax * TIP,               y:  ay * TIP },               // tip
+      { x: -ax * BODY + px * HALF,  y: -ay * BODY + py * HALF },  // base-right
+      { x: -ax * NOTCH,             y: -ay * NOTCH },              // back notch
+      { x: -ax * BODY - px * HALF,  y: -ay * BODY - py * HALF },  // base-left
+    ], true);
+  }
+
+  _spawnClickRipple(x, y) {
+    const COLOR      = 0x44dd11;
+    const COLOR_HI   = 0xaaffaa;
+    const COLOR_GLOW = 0xccffaa;
+    const R_START    = 16;
+    const CONVERGE   = 270;
+
+    const diagonals = [Math.PI * 0.25, Math.PI * 0.75, Math.PI * 1.25, Math.PI * 1.75];
+    const arrows = [];
+
+    for (const angle of diagonals) {
+      const g = this.add.graphics();
+      g.setAlpha(0);
+
+      const inward = angle + Math.PI;
+      const ax = Math.cos(inward);
+      const ay = Math.sin(inward);
+      const px = -ay;
+      const py =  ax;
+
+      // Outer glow — white, faint, slightly larger
+      this._drawChevron(g, ax, ay, px, py, 0xffffff, 0.18, 1.5);
+      // Mid glow — green, semi-transparent, slightly larger
+      this._drawChevron(g, ax, ay, px, py, COLOR_HI, 0.25, 1.2);
+      // Core — solid bright green
+      this._drawChevron(g, ax, ay, px, py, COLOR, 1.0, 1.0);
+      // Tip highlight — tiny bright dot at the point
+      g.fillStyle(0xeeffcc, 0.9);
+      g.fillCircle(ax * 7, ay * 7, 1.2);
+
+      g.setPosition(x + Math.cos(angle) * R_START, y + Math.sin(angle) * R_START);
+      arrows.push(g);
+
+      this.tweens.add({ targets: g, alpha: 1, duration: 50, ease: 'Quad.easeOut' });
+    }
+
+    let completed = 0;
+    for (const g of arrows) {
+      this.tweens.add({
+        targets: g,
+        x,
+        y,
+        alpha: 0,
+        duration: CONVERGE,
+        ease: 'Quad.easeIn',
+        delay: 35,
+        onComplete: () => {
+          g.destroy();
+          if (++completed < arrows.length) {
+            return;
+          }
+
+          // Phase 2 — burst
+          const burst = this.add.graphics();
+          burst.fillStyle(COLOR_GLOW, 1);
+          burst.fillCircle(0, 0, 3);
+          burst.setPosition(x, y);
+          this.tweens.add({
+            targets: burst,
+            scaleX: 3.5,
+            scaleY: 3.5,
+            alpha: 0,
+            duration: 150,
+            ease: 'Quad.easeOut',
+            onComplete: () => {
+              burst.destroy();
+
+              // Phase 3 — ring
+              const ring = this.add.graphics();
+              ring.lineStyle(1.2, COLOR, 0.9);
+              ring.strokeCircle(0, 0, 5);
+              ring.setPosition(x, y);
+              this.tweens.add({
+                targets: ring,
+                scaleX: 3.5,
+                scaleY: 3.5,
+                alpha: 0,
+                duration: 260,
+                ease: 'Quad.easeOut',
+                onComplete: () => ring.destroy(),
+              });
+            },
+          });
+        },
+      });
+    }
+  }
+
+  // Returns true if (px, py) is a valid move target (px,py = fighter feet in logical px).
+  // Uses three independent checks so each zone is as tight as possible.
+  _isValidMoveTarget(px, py) {
+    const L = this.layout;
+
+    // Compute this fighter's actual upward extent (feet → action bubble top).
+    // Formula mirrors addFighter(): avatarY = -(round(12*scale) + 38), avRadius = size*0.85*1.06/2
+    const entry = this.currentUserId ? this.fighters.get(this.currentUserId) : null;
+    const fsize   = entry?.displaySize ?? 48;
+    const scale   = fsize / 18; // SPRITE_CHAR_HEIGHT = 18
+    const avatarUp = Math.round(12 * scale) + 38; // |avatarY|, px upward to avatar center
+    const avRadius = Math.round(fsize * 0.85 * 1.06) / 2;
+    const fighterH = avatarUp + avRadius + 30; // +30 for bubble height + margin
+
+    // Edge padding
+    if (px < L.logicalWidth  * 0.03 || px > L.logicalWidth  * 0.97) return false;
+    if (py < L.logicalHeight * 0.03 || py > L.logicalHeight * 0.97) return false;
+
+    // 1. Action bubble must stay on-screen — prevents going so high it disappears
+    if (py < fighterH + L.logicalHeight * 0.02) return false;
+
+    // 2+3. Merged boss+HP bar exclusion — one solid column from boss sprite top to HP bar bottom.
+    //      Blocks the gap between them so fighters can't sneak through the seam.
+    const bossType    = this.bossTypeFor(this.bossState?.number ?? 0);
+    const bossScale   = bossType.scale ?? 1;
+    const bossFrameW  = bossType.animFiles ? bossType.animFiles.idle.frameWidth  : (bossType.frameWidth  ?? 32);
+    const bossFrameH  = bossType.animFiles ? bossType.animFiles.idle.frameHeight : (bossType.frameHeight ?? 32);
+    const bossHalfW   = (bossFrameW * bossScale) / 2;
+    const bossHalfH   = (bossFrameH * bossScale) / 2;
+    const hpHalfW     = L.hpBar.width / 2 + 15;
+    const zoneHalfW   = Math.max(bossHalfW + 12, hpHalfW);
+    const zoneTop     = L.boss.anchor.y - bossHalfH - 12;
+    // Include bubble half-height so the bubble top never clips the HP bar bottom.
+    const fontPx      = Math.max(9, Math.round(fsize * 0.22));
+    const bubbleHalfH = Math.ceil((fontPx + 8) / 2);
+    const zoneBot     = L.hpBar.y + L.hpBar.height + 10 + bubbleHalfH;
+    if (Math.abs(px - L.boss.anchor.x) < zoneHalfW &&
+        py - fighterH < zoneBot &&
+        py > zoneTop) {
+      return false;
+    }
+
+    // 4. Leaderboard: neither avatar nor action bubble may overlap the panel.
+    //    Pad the left edge by the estimated action bubble half-width so the widest
+    //    text (18 chars at fighter font size) stays clear of the panel border.
+    const bubbleHalfW = Math.ceil(ACTIVITY_MAX_CHARS * fontPx * 0.6 / 2) + 12;
+    const LB_W = 240, LB_H = 160, LB_PAD = 4, LB_TOP = 5;
+    const lbLeft = this.mode === 'portrait' ? LB_PAD : L.logicalWidth - LB_PAD - LB_W;
+    if (px > lbLeft - bubbleHalfW && px < lbLeft + LB_W + bubbleHalfW &&
+        py - fighterH < LB_TOP + LB_H && py > LB_TOP) {
+      return false;
+    }
+
+    return true;
+  }
+
+  // Returns a Y position guaranteed to clear boss sprite, HP bar, and fighter height.
+  _bypassY() {
+    const L = this.layout;
+    const entry = this.currentUserId ? this.fighters.get(this.currentUserId) : null;
+    const fsize = entry?.displaySize ?? 48;
+    const scale = fsize / 18;
+    const avatarUp = Math.round(12 * scale) + 38;
+    const avRadius = Math.round(fsize * 0.85 * 1.06) / 2;
+    const fighterH = avatarUp + avRadius + 30;
+
+    // Same zoneBot as _isValidMoveTarget: HP bar bottom + 10 + bubbleHalfH
+    const fontPx      = Math.max(9, Math.round(fsize * 0.22));
+    const bubbleHalfH = Math.ceil((fontPx + 8) / 2);
+    const zoneBot     = L.hpBar.y + L.hpBar.height + 10 + bubbleHalfH;
+    return Math.min(zoneBot + fighterH + 15, L.logicalHeight * 0.92);
+  }
+
+  // Returns waypoint list to reach (toX, toY) from (fromX, fromY).
+  // If direct path is clear → single waypoint (direct).
+  // If blocked but destination is valid → 3-segment detour via bypassY below boss.
+  // Falls back to clamped boundary if detour not feasible.
+  _planRoute(fromX, fromY, toX, toY) {
+    const direct = this._clampMoveTarget(fromX, fromY, toX, toY);
+    const directClear = direct
+      && Math.abs(direct.x - toX) < 2
+      && Math.abs(direct.y - toY) < 2;
+
+    if (directClear) {
+      return [{ x: toX, y: toY }];
+    }
+
+    // Destination must be reachable by itself for a detour to make sense
+    if (!this._isValidMoveTarget(toX, toY)) {
+      return direct ? [direct] : null;
+    }
+
+    const bypassY = this._bypassY();
+    const wp1 = { x: fromX, y: bypassY };
+    const wp2 = { x: toX,   y: bypassY };
+
+    // Verify every segment of the detour is clear
+    if (this._isValidMoveTarget(wp1.x, wp1.y) && this._isValidMoveTarget(wp2.x, wp2.y)) {
+      const allClear = (from, to) => {
+        const r = this._clampMoveTarget(from.x, from.y, to.x, to.y);
+        return r && Math.abs(r.x - to.x) < 2 && Math.abs(r.y - to.y) < 2;
+      };
+      if (allClear({ x: fromX, y: fromY }, wp1)
+          && allClear(wp1, wp2)
+          && allClear(wp2, { x: toX, y: toY })) {
+        const route = [];
+        if (Math.abs(fromY - bypassY) > 5) route.push(wp1);
+        if (Math.abs(fromX - toX)    > 5) route.push(wp2);
+        route.push({ x: toX, y: toY });
+        return route;
+      }
+    }
+
+    return direct ? [direct] : null;
+  }
+
+  // Animate fighter sprite through a list of waypoints locally (no server dispatch per step).
+  // Caller is responsible for dispatching the final position to Livewire once.
+  _animateRoute(entry, route) {
+    this.tweens.killTweensOf(entry.sprite);
+    if (entry.handle) this.tweens.killTweensOf(entry.handle);
+    entry.waypointMoving = true;
+
+    const SPEED = 300; // px/s
+
+    const step = (idx) => {
+      if (!entry.sprite?.active || idx >= route.length) {
+        entry.waypointMoving = false;
+        return;
+      }
+      const target = route[idx];
+      const dx = target.x - entry.sprite.x;
+      const dy = target.y - entry.sprite.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const duration = Math.max(150, Math.round((dist / SPEED) * 1000));
+      const flipX = dx < -5 ? true : (dx > 5 ? false : target.x > this.layout.boss.anchor.x);
+
+      if (entry.body && entry.animState !== 'attack') {
+        entry.animState = 'walk';
+        entry.body.setFlipX(flipX);
+        entry.body.play(entry.ftype.key + '-walk', true);
+      }
+
+      this.tweens.add({
+        targets: entry.sprite,
+        x: target.x, y: target.y,
+        duration,
+        ease: 'Linear',
+        onComplete: () => {
+          if (!entry.sprite?.active) {
+            entry.waypointMoving = false;
+            return;
+          }
+          if (idx === route.length - 1) {
+            entry.pos = target;
+            entry.waypointMoving = false;
+            if (entry.body && entry.animState !== 'attack') {
+              const isCharging = this.charges.has(entry.id);
+              const next = isCharging ? 'walk' : 'idle';
+              entry.animState = next;
+              entry.body.setFlipX(next === 'walk' ? target.x > this.layout.boss.anchor.x : false);
+              entry.body.play(entry.ftype.key + '-' + next, true);
+            }
+          }
+          step(idx + 1);
+        },
+      });
+
+      if (entry.handle) {
+        this.tweens.killTweensOf(entry.handle);
+        const spriteScale = entry.sprite.scaleX;
+        const fontPx = handleFontPx(entry.displaySize);
+        this.tweens.add({
+          targets: entry.handle,
+          x: target.x,
+          y: target.y + entry.legH * spriteScale + fontPx,
+          duration,
+          ease: 'Linear',
+        });
+      }
+
+      if (entry.bubble) {
+        const avatarRelY   = entry.head?.y ?? 0;
+        const avatarRadius = (entry.head?.displayHeight ?? 28) / 2;
+        entry.bubble.tweenTo(this, target.x, target.y + avatarRelY - avatarRadius - 28, duration);
+      }
+
+      const charge = this.charges.get(entry.id);
+      if (charge) {
+        if (charge.trail?.scene) {
+          this.tweens.killTweensOf(charge.trail);
+          const tb = target.x <= this.layout.boss.anchor.x ? 1 : -1;
+          const cb = Math.round(entry.displaySize / 3);
+          this.tweens.add({
+            targets: charge.trail,
+            x: target.x - tb * Math.round(entry.displaySize * 0.18),
+            y: target.y + cb - Math.round(entry.displaySize * 0.12),
+            duration,
+            ease: 'Linear',
+          });
+        }
+        if (charge.bubble) {
+          const avatarRelY   = entry.head?.y ?? 0;
+          const avatarRadius = (entry.head?.displayHeight ?? 28) / 2;
+          charge.bubble.tweenTo(this, target.x, target.y + avatarRelY - avatarRadius - 16, duration);
+        }
+      }
+    };
+
+    step(0);
+  }
+
+  // Find the furthest valid point from source along segment [from → to].
+  // Always binary-searches the full path — never skips even if destination is valid,
+  // because the path itself might cross a restricted zone (e.g. boss).
+  _clampMoveTarget(fromX, fromY, toX, toY) {
+    // Binary search: lo=source (t=0, always valid), hi=destination (t=1)
+    let lo = 0, hi = 1;
+    for (let i = 0; i < 18; i++) {
+      const mid = (lo + hi) / 2;
+      const mx  = fromX + (toX - fromX) * mid;
+      const my  = fromY + (toY - fromY) * mid;
+      if (this._isValidMoveTarget(mx, my)) {
+        lo = mid;
+      } else {
+        hi = mid;
+      }
+    }
+
+    if (lo < 0.005) return null; // source itself is invalid, don't move
+    if (lo > 0.999) return { x: toX, y: toY }; // destination reachable, path clear
+    return {
+      x: fromX + (toX - fromX) * lo,
+      y: fromY + (toY - fromY) * lo,
+    };
+  }
+
+  _setupMoveInput() {
+    if (!this.currentUserId) {
+      return;
+    }
+
+    let debounceTimer = null;
+
+    this.input.on('pointerdown', pointer => {
+      // Always show ripple at click point
+      this._spawnClickRipple(pointer.x, pointer.y);
+
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        const entry = this.fighters.get(this.currentUserId);
+        const from  = entry?.pos ?? { x: pointer.x, y: pointer.y };
+        const route = this._planRoute(from.x, from.y, pointer.x, pointer.y);
+        if (!route || route.length === 0) return;
+
+        const final = route[route.length - 1];
+        const x = parseFloat((final.x / this.layout.logicalWidth).toFixed(4));
+        const y = parseFloat((final.y / this.layout.logicalHeight).toFixed(4));
+
+        // Always cancel any stale waypoint animation — kills tweens without onComplete,
+        // so we must manually clear the flag to unblock handleFighterMoved.
+        if (entry) {
+          entry.waypointMoving = false;
+          this.tweens.killTweensOf(entry.sprite);
+          if (entry.handle) this.tweens.killTweensOf(entry.handle);
+        }
+
+        if (route.length > 1 && entry) {
+          // Detour route: animate locally, dispatch only the final destination
+          this._animateRoute(entry, route);
+        }
+
+        if (window.Livewire) {
+          window.Livewire.dispatch('fighter-move', { x, y });
+        }
+      }, 100);
+    });
+
+    this.input.on('pointermove', () => {
+      this.game.canvas.style.cursor = 'pointer';
+    });
   }
 }
