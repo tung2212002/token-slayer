@@ -1,6 +1,6 @@
-import { ACTIVITY_MAX_CHARS } from '@battlefield/bubble.js';
 import { Boss } from '@battlefield/boss.js';
 import { AnimState } from '@battlefield/constants.js';
+import { isValidMoveTarget, bypassY, clampMoveTarget } from '@battlefield/move-geometry.js';
 
 /**
  * Returns the font size in pixels for a fighter handle label.
@@ -198,6 +198,21 @@ export class MoveInput {
   }
 
   /**
+   * Returns the move-geometry context for the current user's fighter.
+   *
+   * @return {{layout: object, bossType: object, fsize: number, isPortrait: boolean}}
+   */
+  _geometryCtx() {
+    const entry = this.scene.currentUserId ? this.scene.fighters.get(this.scene.currentUserId) : null;
+    return {
+      layout: this.scene.layout,
+      bossType: Boss.bossTypeFor(this.scene.bossState?.number ?? 0),
+      fsize: entry?.displaySize ?? 48,
+      isPortrait: this.scene.mode === 'portrait',
+    };
+  }
+
+  /**
    * Returns true if (px, py) is a valid move target in logical pixels.
    *
    * @param {number} px
@@ -205,57 +220,7 @@ export class MoveInput {
    * @return {boolean}
    */
   _isValidMoveTarget(px, py) {
-    const L = this.scene.layout;
-
-    // Compute this fighter's actual upward extent (feet → action bubble top).
-    // Formula mirrors addFighter(): avatarY = -(round(12*scale) + 38), avRadius = size*0.85*1.06/2
-    const entry = this.scene.currentUserId ? this.scene.fighters.get(this.scene.currentUserId) : null;
-    const fsize   = entry?.displaySize ?? 48;
-    const scale   = fsize / 18; // SPRITE_CHAR_HEIGHT = 18
-    const avatarUp = Math.round(12 * scale) + 38; // |avatarY|, px upward to avatar center
-    const avRadius = Math.round(fsize * 0.85 * 1.06) / 2;
-    const fighterH = avatarUp + avRadius + 30; // +30 for bubble height + margin
-
-    // Edge padding
-    if (px < L.logicalWidth  * 0.03 || px > L.logicalWidth  * 0.97) return false;
-    if (py < L.logicalHeight * 0.03 || py > L.logicalHeight * 0.97) return false;
-
-    // 1. Action bubble must stay on-screen — prevents going so high it disappears
-    if (py < fighterH + L.logicalHeight * 0.02) return false;
-
-    // 2+3. Merged boss+HP bar exclusion — one solid column from boss sprite top to HP bar bottom.
-    //      Blocks the gap between them so fighters can't sneak through the seam.
-    const bossType    = Boss.bossTypeFor(this.scene.bossState?.number ?? 0);
-    const bossScale   = bossType.scale ?? 1;
-    const bossFrameW  = bossType.animFiles ? bossType.animFiles.idle.frameWidth  : (bossType.frameWidth  ?? 32);
-    const bossFrameH  = bossType.animFiles ? bossType.animFiles.idle.frameHeight : (bossType.frameHeight ?? 32);
-    const bossHalfW   = (bossFrameW * bossScale) / 2;
-    const bossHalfH   = (bossFrameH * bossScale) / 2;
-    const hpHalfW     = L.hpBar.width / 2 + 15;
-    const zoneHalfW   = Math.max(bossHalfW + 12, hpHalfW);
-    const zoneTop     = L.boss.anchor.y - bossHalfH - 12;
-    // Include bubble half-height so the bubble top never clips the HP bar bottom.
-    const fontPx      = Math.max(9, Math.round(fsize * 0.22));
-    const bubbleHalfH = Math.ceil((fontPx + 8) / 2);
-    const zoneBot     = L.hpBar.y + L.hpBar.height + 10 + bubbleHalfH;
-    if (Math.abs(px - L.boss.anchor.x) < zoneHalfW &&
-        py - fighterH < zoneBot &&
-        py > zoneTop) {
-      return false;
-    }
-
-    // 4. Leaderboard: neither avatar nor action bubble may overlap the panel.
-    //    Pad the left edge by the estimated action bubble half-width so the widest
-    //    text (18 chars at fighter font size) stays clear of the panel border.
-    const bubbleHalfW = Math.ceil(ACTIVITY_MAX_CHARS * fontPx * 0.6 / 2) + 12;
-    const LB_W = 240, LB_H = 160, LB_PAD = 4, LB_TOP = 5;
-    const lbLeft = this.scene.mode === 'portrait' ? LB_PAD : L.logicalWidth - LB_PAD - LB_W;
-    if (px > lbLeft - bubbleHalfW && px < lbLeft + LB_W + bubbleHalfW &&
-        py - fighterH < LB_TOP + LB_H && py > LB_TOP) {
-      return false;
-    }
-
-    return true;
+    return isValidMoveTarget(px, py, this._geometryCtx());
   }
 
   /**
@@ -264,19 +229,7 @@ export class MoveInput {
    * @return {number}
    */
   _bypassY() {
-    const L = this.scene.layout;
-    const entry = this.scene.currentUserId ? this.scene.fighters.get(this.scene.currentUserId) : null;
-    const fsize = entry?.displaySize ?? 48;
-    const scale = fsize / 18;
-    const avatarUp = Math.round(12 * scale) + 38;
-    const avRadius = Math.round(fsize * 0.85 * 1.06) / 2;
-    const fighterH = avatarUp + avRadius + 30;
-
-    // Same zoneBot as _isValidMoveTarget: HP bar bottom + 10 + bubbleHalfH
-    const fontPx      = Math.max(9, Math.round(fsize * 0.22));
-    const bubbleHalfH = Math.ceil((fontPx + 8) / 2);
-    const zoneBot     = L.hpBar.y + L.hpBar.height + 10 + bubbleHalfH;
-    return Math.min(zoneBot + fighterH + 15, L.logicalHeight * 0.92);
+    return bypassY(this._geometryCtx());
   }
 
   /**
@@ -438,24 +391,6 @@ export class MoveInput {
    * @return {{x: number, y: number}|null}
    */
   _clampMoveTarget(fromX, fromY, toX, toY) {
-    // Binary search: lo=source (t=0, always valid), hi=destination (t=1)
-    let lo = 0, hi = 1;
-    for (let i = 0; i < 18; i++) {
-      const mid = (lo + hi) / 2;
-      const mx  = fromX + (toX - fromX) * mid;
-      const my  = fromY + (toY - fromY) * mid;
-      if (this._isValidMoveTarget(mx, my)) {
-        lo = mid;
-      } else {
-        hi = mid;
-      }
-    }
-
-    if (lo < 0.005) return null; // source itself is invalid, don't move
-    if (lo > 0.999) return { x: toX, y: toY }; // destination reachable, path clear
-    return {
-      x: fromX + (toX - fromX) * lo,
-      y: fromY + (toY - fromY) * lo,
-    };
+    return clampMoveTarget(fromX, fromY, toX, toY, this._geometryCtx());
   }
 }
