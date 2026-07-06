@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { BOSS_TYPES, FIGHTER_TYPES } from '../../resources/js/battlefield/config.js';
+import { BOSS_TYPES, FIGHTER_TYPES } from '@battlefield/config.js';
 
 const publicFile = (urlPath) => join(process.cwd(), 'public', urlPath.split('?')[0]);
 
@@ -31,6 +31,16 @@ describe('FIGHTER_TYPES', () => {
       }
       expect(f.idleFile, `${f.key} must not have legacy idleFile`).toBeUndefined();
       expect(f.runFile,  `${f.key} must not have legacy runFile`).toBeUndefined();
+    }
+  });
+
+  test('each entry has chargeColors as an array of exactly 5 hex numbers', () => {
+    for (const f of FIGHTER_TYPES) {
+      expect(Array.isArray(f.chargeColors), `${f.key} missing chargeColors`).toBe(true);
+      expect(f.chargeColors.length, `${f.key} chargeColors must have 5 values`).toBe(5);
+      for (const c of f.chargeColors) {
+        expect(typeof c, `${f.key} chargeColors must be numbers`).toBe('number');
+      }
     }
   });
 

@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { snapshotState } from '../../resources/js/battlefield/snapshot.js';
+import { snapshotState } from '@battlefield/snapshot.js';
 
 function fakeScene(overrides = {}) {
   return {
