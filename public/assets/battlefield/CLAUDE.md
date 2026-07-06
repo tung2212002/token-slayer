@@ -20,8 +20,8 @@ bosses/skeleton.png       — 32×32 frames, scale 4
 bosses/slime.png          — 32×32 frames, scale 4
 bosses/mini-demon.png     — 32×32 frames, scale 4
 bosses/ghost-fury.png     — 32×32 frames, scale 4
-bosses/minotaur-chierit.png   — 288×160 frames, scale 2
-bosses/demon-slime-chierit.png — 288×160 frames, scale 2
+bosses/minotaur-chierit.png   — 288×160 frames, scale 1
+bosses/demon-slime-chierit.png — 288×160 frames, scale 1
 ```
 
 **Multi-file animated boss** (modern bosses): one PNG per animation state, inside a named folder:

@@ -76,6 +76,7 @@ Some managers are a single file; others are a thin barrel (`x.js` → `export * 
 | `constants.js` | AnimState, AttackType, TextureKey, BusEvent, SCENE_KEY, BossPhase, DreadknightAttack enums |
 | `config.js` → `config/` | Barrel over `bosses.js` (BOSS_TYPES), `fighters.js` (FIGHTER_TYPES), `layouts.js` (LAYOUTS), `timings.js` (TIMINGS) |
 | `layout.js` | Pure position helpers: computeFighterPositions, fighterDisplayConfig, damageScaleMultiplier, chargeFootY, rowsNeeded |
+| `move-geometry.js` | Pure move-target geometry: isValidMoveTarget, bypassY, clampMoveTarget, snapToValidTarget, isInsideLeaderboardPanel — boss/HP-bar column, leaderboard, and Damage HUD exclusion zones (both fixed: leaderboard top-right, Damage HUD top-left, in both orientations); size-aware edge margins |
 | `format.js` | Pure format helpers: formatHp |
 | `snapshot.js` | Snapshot/restore scene state on orientation change |
 | `bus.js` | Tiny event bus for cross-manager communication |
@@ -85,7 +86,7 @@ Some managers are a single file; others are a thin barrel (`x.js` → `export * 
 | `leaderboard.js` → `leaderboard/` | `class Leaderboard` (`index.js`) — TOP DAMAGE panel; `static abbreviateDamage`, `static showMvpCard`; `doom-fire.js` (per-character DOOM fire effect), `mvp.js` (post-kill MVP card) |
 | `charge.js` | `class Charge` — charge ring, trail, fire emitters |
 | `bubble.js` | `class Bubble` — activity bubble + hover tooltip |
-| `move-input.js` | `class MoveInput` — click-to-move routing, chevron, ripple |
+| `move-input.js` | `class MoveInput` — click-to-move routing (delegates geometry to `move-geometry.js`), chevron, ripple; clicking the TOP DAMAGE panel is a no-op (cursor + input both ignore it) |
 | `projectile.js` | `class Projectile` — all projectile types (slash, blast, shuriken, arrow, blade) |
 | `impact.js` | `class Impact` — damage popup, hit flash effects |
 | `boss.js` → `boss/` | `class Boss` (`index.js`) — boss patrol, react animations, HP bar; `dreadknight.js` (abyssal-dreadknight deterministic turn-based patrol); `stun.js` (visual-only stun effect) |
@@ -95,6 +96,7 @@ Some managers are a single file; others are a thin barrel (`x.js` → `export * 
 | Test | What it covers |
 |---|---|
 | `tests/js/layout.test.js` | computeFighterPositions, fighterDisplayConfig, damageScaleMultiplier, chargeFootY, rowsNeeded |
+| `tests/js/move-geometry.test.js` | isValidMoveTarget (edges, boss column, leaderboard, Damage HUD), bypassY, clampMoveTarget, snapToValidTarget, isInsideLeaderboardPanel |
 | `tests/js/config.test.js` | BOSS_TYPES, FIGHTER_TYPES config shape validation |
 | `tests/js/snapshot.test.js` | snapshotState roundtrip |
 | `tests/js/constants.test.js` | BusEvent, TextureKey, SCENE_KEY shape validation |
