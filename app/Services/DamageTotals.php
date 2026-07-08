@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Account;
 use App\Models\Event;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
@@ -47,5 +48,24 @@ final class DamageTotals
     private function forUserQuery(User $user): Builder
     {
         return Event::where('user_id', $user->id);
+    }
+
+    /**
+     * Aggregate token usage for one account's members over rolling windows.
+     *
+     * @return array{hourly:int, daily:int, monthly:int}
+     */
+    public function forAccount(Account $account): array
+    {
+        $base = fn (): Builder => Event::whereIn(
+            'user_id',
+            User::where('account_id', $account->id)->select('id'),
+        );
+
+        return [
+            'hourly' => (int) $base()->where('created_at', '>=', now()->subHour())->sum('tokens'),
+            'daily' => (int) $base()->where('created_at', '>=', now()->subDay())->sum('tokens'),
+            'monthly' => (int) $base()->where('created_at', '>=', now()->subDays(30))->sum('tokens'),
+        ];
     }
 }

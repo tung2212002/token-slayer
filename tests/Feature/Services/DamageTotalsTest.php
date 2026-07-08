@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Account;
 use App\Models\Boss;
 use App\Models\Event;
 use App\Models\User;
@@ -89,4 +90,31 @@ test('hourly window counts only the last hour for global and forUser', function 
 
     expect($this->totals->global()['hourly'])->toBe(40);
     expect($this->totals->forUser($user)['hourly'])->toBe(40);
+});
+
+test('forAccount sums tokens across the account members over rolling windows', function () {
+    $account = Account::factory()->create();
+    $other = Account::factory()->create();
+
+    $alice = User::factory()->create(['account_id' => $account->id]);
+    $bob = User::factory()->create(['account_id' => $account->id]);
+    $carol = User::factory()->create(['account_id' => $other->id]);
+
+    Event::factory()->create(['user_id' => $alice->id, 'tokens' => 40, 'created_at' => now()->subMinutes(30)]); // hourly+daily+monthly
+    Event::factory()->create(['user_id' => $bob->id, 'tokens' => 100, 'created_at' => now()->subHours(5)]);      // daily+monthly
+    Event::factory()->create(['user_id' => $bob->id, 'tokens' => 7, 'created_at' => now()->subDays(10)]);        // monthly only
+    Event::factory()->create(['user_id' => $carol->id, 'tokens' => 999, 'created_at' => now()->subMinutes(5)]); // other account
+
+    expect($this->totals->forAccount($account))->toBe([
+        'hourly' => 40,
+        'daily' => 140,
+        'monthly' => 147,
+    ]);
+});
+
+test('forAccount returns zero totals when the account has no events', function () {
+    $account = Account::factory()->create();
+    User::factory()->create(['account_id' => $account->id]);
+
+    expect($this->totals->forAccount($account))->toBe(['hourly' => 0, 'daily' => 0, 'monthly' => 0]);
 });
