@@ -118,3 +118,48 @@ test('forAccount returns zero totals when the account has no events', function (
 
     expect($this->totals->forAccount($account))->toBe(['hourly' => 0, 'daily' => 0, 'monthly' => 0]);
 });
+
+test('perAccount returns per-window sums, member counts, and an unassigned row', function () {
+    $teamA = Account::factory()->create(['name' => 'Team A', 'plan' => 'max-20x']);
+    $teamB = Account::factory()->create(['name' => 'Team B', 'plan' => 'max-20x']);
+
+    $a1 = User::factory()->create(['account_id' => $teamA->id]);
+    $a2 = User::factory()->create(['account_id' => $teamA->id]);
+    $b1 = User::factory()->create(['account_id' => $teamB->id]);
+    $loner = User::factory()->create(['account_id' => null]);
+
+    Event::factory()->create(['user_id' => $a1->id, 'tokens' => 40, 'created_at' => now()->subMinutes(30)]); // hourly
+    Event::factory()->create(['user_id' => $a2->id, 'tokens' => 100, 'created_at' => now()->subHours(5)]);    // daily
+    Event::factory()->create(['user_id' => $b1->id, 'tokens' => 10, 'created_at' => now()->subDays(3)]);      // monthly
+    Event::factory()->create(['user_id' => $loner->id, 'tokens' => 7, 'created_at' => now()->subMinutes(5)]); // unassigned hourly
+
+    $rows = collect($this->totals->perAccount());
+
+    $rowA = $rows->firstWhere('name', 'Team A');
+    expect($rowA)->toMatchArray(['memberCount' => 2, 'hourly' => 40, 'daily' => 140, 'monthly' => 140]);
+
+    $rowB = $rows->firstWhere('name', 'Team B');
+    expect($rowB)->toMatchArray(['memberCount' => 1, 'hourly' => 0, 'daily' => 0, 'monthly' => 10]);
+
+    $unassigned = $rows->firstWhere('name', '— unassigned —');
+    expect($unassigned)->toMatchArray(['memberCount' => 1, 'hourly' => 7, 'daily' => 7, 'monthly' => 7]);
+});
+
+test('perUser returns per-window sums ordered by daily desc with account name', function () {
+    $team = Account::factory()->create(['name' => 'Team A']);
+    $heavy = User::factory()->create(['account_id' => $team->id, 'slack_handle' => 'heavy']);
+    $light = User::factory()->create(['account_id' => null, 'slack_handle' => 'light']);
+    User::factory()->create(['slack_handle' => 'idle']); // no events → omitted
+
+    Event::factory()->create(['user_id' => $heavy->id, 'tokens' => 200, 'created_at' => now()->subHours(2)]);  // daily
+    Event::factory()->create(['user_id' => $heavy->id, 'tokens' => 20, 'created_at' => now()->subMinutes(10)]); // hourly
+    Event::factory()->create(['user_id' => $light->id, 'tokens' => 50, 'created_at' => now()->subHours(3)]);    // daily
+
+    $rows = $this->totals->perUser();
+
+    expect($rows)->toHaveCount(2)
+        ->and($rows[0]['handle'])->toBe('heavy')
+        ->and($rows[0])->toMatchArray(['account_name' => 'Team A', 'hourly' => 20, 'daily' => 220, 'monthly' => 220])
+        ->and($rows[1]['handle'])->toBe('light')
+        ->and($rows[1]['account_name'])->toBeNull();
+});
