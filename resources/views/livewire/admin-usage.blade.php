@@ -47,7 +47,7 @@
                         <td class="py-2 font-medium">
                             <span class="inline-flex items-center gap-2">
                                 @if ($row['avatar_url'])
-                                    <img src="{{ $row['avatar_url'] }}" class="w-6 h-6 rounded-full">
+                                    <img src="{{ $row['avatar_url'] }}" alt="{{ $row['handle'] }}" class="w-6 h-6 rounded-full">
                                 @endif
                                 {{ $row['handle'] }}
                             </span>
