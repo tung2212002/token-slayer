@@ -212,7 +212,7 @@ test('user-prompt-submit caches the fighter activity', function () {
     expect($entry['activity'])->toBe('thinking…');
 });
 
-test('pre-tool-use caches the summarized tool activity', function () {
+test('pre-tool-use without a description falls back to the bare tool name', function () {
     $this->withHeader('Authorization', 'Bearer tok')
         ->postJson('/api/events', [
             'hook_event_name' => 'PreToolUse',
@@ -222,7 +222,20 @@ test('pre-tool-use caches the summarized tool activity', function () {
         ->assertCreated();
 
     $entry = app(FighterChargingCache::class)->many([$this->user->id])[$this->user->id];
-    expect($entry['activity'])->toStartWith('$ npm install');
+    expect($entry['activity'])->toBe('Bash');
+});
+
+test('pre-tool-use uses the tool_input description when present', function () {
+    $this->withHeader('Authorization', 'Bearer tok')
+        ->postJson('/api/events', [
+            'hook_event_name' => 'PreToolUse',
+            'tool_name' => 'Bash',
+            'tool_input' => ['command' => 'npm install', 'description' => 'Install npm dependencies'],
+        ])
+        ->assertCreated();
+
+    $entry = app(FighterChargingCache::class)->many([$this->user->id])[$this->user->id];
+    expect($entry['activity'])->toBe('Install npm dependencies');
 });
 
 test('stop with tokens clears the cached charging entry', function () {

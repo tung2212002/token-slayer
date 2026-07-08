@@ -126,6 +126,9 @@ class EventController extends Controller
 
     /**
      * Build a short "what is the agent doing" string from a PreToolUse payload.
+     * Tools that carry their own human-written description (e.g. Bash, Task)
+     * use that verbatim; otherwise fall back to the bare tool name so we never
+     * expose raw command/file/pattern input we don't have a description for.
      *
      * @param  array<string, mixed>  $payload
      */
@@ -134,20 +137,9 @@ class EventController extends Controller
         $tool = (string) ($payload['tool_name'] ?? 'tool');
         $input = (array) ($payload['tool_input'] ?? []);
 
-        $detail = match ($tool) {
-            'Bash' => '$ '.(string) ($input['command'] ?? ''),
-            'run_command' => '$ '.(string) ($input['CommandLine'] ?? ''),
-            'Read', 'Edit', 'Write', 'NotebookEdit' => $tool.': '.basename((string) ($input['file_path'] ?? '')),
-            'read_file', 'view_file' => $tool.': '.basename((string) ($input['AbsolutePath'] ?? '')),
-            'write_file', 'write_to_file', 'replace_file_content', 'multi_replace_file_content' => $tool.': '.basename((string) ($input['TargetFile'] ?? ($input['AbsolutePath'] ?? ''))),
-            'Grep' => 'Grep: '.(string) ($input['pattern'] ?? ''),
-            'grep_search' => 'Grep: '.(string) ($input['Query'] ?? ''),
-            'Glob' => 'Glob: '.(string) ($input['pattern'] ?? ''),
-            'WebFetch' => 'WebFetch: '.(string) ($input['url'] ?? ''),
-            'TodoWrite' => 'TodoWrite',
-            'Task' => 'Agent: '.(string) ($input['description'] ?? ''),
-            default => $tool,
-        };
+        $description = trim((string) ($input['description'] ?? ''));
+
+        $detail = $description !== '' ? $description : $tool;
 
         return mb_strlen($detail) > 40 ? mb_substr($detail, 0, 39).'…' : $detail;
     }
