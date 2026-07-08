@@ -68,4 +68,16 @@ final class DamageTotals
             'monthly' => (int) $base()->where('created_at', '>=', now()->subDays(30))->sum('tokens'),
         ];
     }
+
+    /** @return array<int, array<string, mixed>> */
+    public function perAccount(): array
+    {
+        return [];
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    public function perUser(): array
+    {
+        return [];
+    }
 }
