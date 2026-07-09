@@ -90,7 +90,7 @@ class Battlefield extends Component
     }
 
     /**
-     * @return array{allTime:int, monthly:int, daily:int}
+     * @return array{allTime:int, monthly:int, daily:int, hourly:int}
      */
     public function globalDamage(): array
     {
