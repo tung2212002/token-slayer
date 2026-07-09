@@ -33,6 +33,15 @@ export class Leaderboard {
     this._fighters  = new Map();
     this._isPortrait = scene.mode === 'portrait';
 
+    if (this._isPortrait) {
+      this._rows = [];
+      this._shimmers = [];
+      this._fires = [];
+      this._fireUpdateHandler = null;
+      this._allDisplayObjects = [];
+      return;
+    }
+
     const W      = scene.layout.logicalWidth;
     const panL   = W - PANEL_PAD - PANEL_W;
     const panTopY = PANEL_TOP;
@@ -77,7 +86,7 @@ export class Leaderboard {
     const SHIMMER_COLORS = ['#ffcc00', '#ff8800', '#ff4400'];
     const SHIMMER_ALPHA  = [0.75, 0.55, 0.32];
 
-    this._shimmers = this._isPortrait ? [] : this._rows.slice(0, 3).map((_, i) => {
+    this._shimmers = this._rows.slice(0, 3).map((_, i) => {
       const y = rowsStartY + i * ROW_H;
       const s = scene.addSharpText(nameX, y - 1, '', {
         fontFamily: 'monospace', fontSize: '15px', color: SHIMMER_COLORS[i],
@@ -92,18 +101,15 @@ export class Leaderboard {
       return s;
     });
 
-    this._fires = this._isPortrait ? [] : this._rows.slice(0, 3).map((_, i) => {
+    this._fires = this._rows.slice(0, 3).map((_, i) => {
       const baseY = rowsStartY + i * ROW_H + 7;
       return createDoomFire(scene, nameX, baseY, i);
     });
 
-    this._fireUpdateHandler = null;
-    if (!this._isPortrait) {
-      this._fireUpdateHandler = () => {
-        for (const f of this._fires) if (f.active) f.tick();
-      };
-      scene.events.on('update', this._fireUpdateHandler);
-    }
+    this._fireUpdateHandler = () => {
+      for (const f of this._fires) if (f.active) f.tick();
+    };
+    scene.events.on('update', this._fireUpdateHandler);
 
     this._allDisplayObjects = [gfx, titleText, ...this._rows.flatMap(r => [r.rank, r.name, r.right]), ...this._shimmers];
   }
@@ -212,6 +218,10 @@ export class Leaderboard {
    * @return {void}
    */
   _render() {
+    if (this._isPortrait) {
+      this._emitPortrait();
+      return;
+    }
     const top = this._ranked().slice(0, TOP_ROWS);
     for (let i = 0; i < TOP_ROWS; i++) {
       if (top[i]) {
@@ -220,7 +230,7 @@ export class Leaderboard {
         this._rows[i].rank.setText(`${i + 1}.`);
         this._rows[i].name.setText(handle);
         this._rows[i].right.setText(Leaderboard.abbreviateDamage(entry.damage).padStart(DMG_W));
-        if (!this._isPortrait && i < 3) {
+        if (i < 3) {
           this._shimmers[i].setText(handle).setVisible(true);
           this._fires[i].show(this._rows[i].name.width);
         }
@@ -228,13 +238,12 @@ export class Leaderboard {
         this._rows[i].rank.setText('');
         this._rows[i].name.setText('');
         this._rows[i].right.setText('');
-        if (!this._isPortrait && i < 3) {
+        if (i < 3) {
           this._shimmers[i].setText('').setVisible(false);
           this._fires[i].hide();
         }
       }
     }
-    if (this._isPortrait) this._emitPortrait();
   }
 
   /**
