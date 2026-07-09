@@ -120,8 +120,8 @@ test('forAccount returns zero totals when the account has no events', function (
 });
 
 test('perAccount returns per-window sums, member counts, and an unassigned row', function () {
-    $teamA = Account::factory()->create(['name' => 'Team A', 'plan' => 'max-20x']);
-    $teamB = Account::factory()->create(['name' => 'Team B', 'plan' => 'max-20x']);
+    $teamA = Account::factory()->create(['email' => 'team-a@example.com', 'plan' => 'max-20x']);
+    $teamB = Account::factory()->create(['email' => 'team-b@example.com', 'plan' => 'max-20x']);
 
     $a1 = User::factory()->create(['account_id' => $teamA->id]);
     $a2 = User::factory()->create(['account_id' => $teamA->id]);
@@ -135,18 +135,18 @@ test('perAccount returns per-window sums, member counts, and an unassigned row',
 
     $rows = collect($this->totals->perAccount());
 
-    $rowA = $rows->firstWhere('name', 'Team A');
+    $rowA = $rows->firstWhere('email', 'team-a@example.com');
     expect($rowA)->toMatchArray(['memberCount' => 2, 'hourly' => 40, 'daily' => 140, 'monthly' => 140]);
 
-    $rowB = $rows->firstWhere('name', 'Team B');
+    $rowB = $rows->firstWhere('email', 'team-b@example.com');
     expect($rowB)->toMatchArray(['memberCount' => 1, 'hourly' => 0, 'daily' => 0, 'monthly' => 10]);
 
-    $unassigned = $rows->firstWhere('name', '— unassigned —');
+    $unassigned = $rows->firstWhere('email', '— unassigned —');
     expect($unassigned)->toMatchArray(['memberCount' => 1, 'hourly' => 7, 'daily' => 7, 'monthly' => 7]);
 });
 
 test('perUser returns per-window sums ordered by daily desc with account name', function () {
-    $team = Account::factory()->create(['name' => 'Team A']);
+    $team = Account::factory()->create(['email' => 'team-a@example.com']);
     $heavy = User::factory()->create(['account_id' => $team->id, 'slack_handle' => 'heavy']);
     $light = User::factory()->create(['account_id' => null, 'slack_handle' => 'light']);
     User::factory()->create(['slack_handle' => 'idle']); // no events → omitted
@@ -159,7 +159,7 @@ test('perUser returns per-window sums ordered by daily desc with account name', 
 
     expect($rows)->toHaveCount(2)
         ->and($rows[0]['handle'])->toBe('heavy')
-        ->and($rows[0])->toMatchArray(['account_name' => 'Team A', 'hourly' => 20, 'daily' => 220, 'monthly' => 220])
+        ->and($rows[0])->toMatchArray(['account_email' => 'team-a@example.com', 'hourly' => 20, 'daily' => 220, 'monthly' => 220])
         ->and($rows[1]['handle'])->toBe('light')
-        ->and($rows[1]['account_name'])->toBeNull();
+        ->and($rows[1]['account_email'])->toBeNull();
 });

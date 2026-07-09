@@ -70,11 +70,11 @@ final class DamageTotals
     }
 
     /**
-     * One row per account (ordered by name) plus a trailing unassigned row,
+     * One row per account (ordered by email) plus a trailing unassigned row,
      * each with member count and per-window token sums. Single grouped query
      * for the sums; accounts with no recent activity still appear at zero.
      *
-     * @return array<int, array{account_id:?int, name:string, plan:?string, memberCount:int, hourly:int, daily:int, monthly:int}>
+     * @return array<int, array{account_id:?int, email:string, plan:?string, memberCount:int, hourly:int, daily:int, monthly:int}>
      */
     public function perAccount(): array
     {
@@ -100,12 +100,12 @@ final class DamageTotals
             }
         }
 
-        $rows = Account::withCount('users')->orderBy('name')->get()->map(function (Account $account) use ($byAccount): array {
+        $rows = Account::withCount('users')->orderBy('email')->get()->map(function (Account $account) use ($byAccount): array {
             $sum = $byAccount[$account->id] ?? null;
 
             return [
                 'account_id' => $account->id,
-                'name' => $account->name,
+                'email' => $account->email,
                 'plan' => $account->plan,
                 'memberCount' => $account->users_count,
                 'hourly' => (int) ($sum->hourly ?? 0),
@@ -118,7 +118,7 @@ final class DamageTotals
         if ($unassignedMembers > 0 || $unassignedSums !== null) {
             $rows[] = [
                 'account_id' => null,
-                'name' => '— unassigned —',
+                'email' => '— unassigned —',
                 'plan' => null,
                 'memberCount' => $unassignedMembers,
                 'hourly' => (int) ($unassignedSums->hourly ?? 0),
@@ -132,9 +132,9 @@ final class DamageTotals
 
     /**
      * One row per user with activity in the last 30 days, ordered by daily
-     * usage descending, annotated with the user's handle and account name.
+     * usage descending, annotated with the user's handle and account email.
      *
-     * @return array<int, array{user_id:int, handle:string, avatar_url:?string, account_name:?string, hourly:int, daily:int, monthly:int}>
+     * @return array<int, array{user_id:int, handle:string, avatar_url:?string, account_email:?string, hourly:int, daily:int, monthly:int}>
      */
     public function perUser(): array
     {
@@ -144,10 +144,10 @@ final class DamageTotals
             ->join('users', 'users.id', '=', 'events.user_id')
             ->leftJoin('accounts', 'accounts.id', '=', 'users.account_id')
             ->where('events.created_at', '>=', $monthAgo)
-            ->groupBy('users.id', 'users.slack_handle', 'users.display_name', 'users.name', 'users.avatar_url', 'accounts.name')
+            ->groupBy('users.id', 'users.slack_handle', 'users.display_name', 'users.name', 'users.avatar_url', 'accounts.email')
             ->selectRaw('users.id as user_id')
             ->selectRaw('users.slack_handle, users.display_name, users.name, users.avatar_url')
-            ->selectRaw('accounts.name as account_name')
+            ->selectRaw('accounts.email as account_email')
             ->selectRaw('SUM(CASE WHEN events.created_at >= ? THEN events.tokens ELSE 0 END) as hourly', [$hourAgo])
             ->selectRaw('SUM(CASE WHEN events.created_at >= ? THEN events.tokens ELSE 0 END) as daily', [$dayAgo])
             ->selectRaw('SUM(events.tokens) as monthly')
@@ -157,7 +157,7 @@ final class DamageTotals
                 'user_id' => (int) $row->user_id,
                 'handle' => $row->slack_handle ?: ($row->display_name ?: ($row->name ?: ('#'.$row->user_id))),
                 'avatar_url' => $row->avatar_url,
-                'account_name' => $row->account_name,
+                'account_email' => $row->account_email,
                 'hourly' => (int) $row->hourly,
                 'daily' => (int) $row->daily,
                 'monthly' => (int) $row->monthly,

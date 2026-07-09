@@ -16,7 +16,7 @@ class AccountFactory extends Factory
     public function definition(): array
     {
         return [
-            'name' => 'Team '.fake()->unique()->lexify('??'),
+            'email' => fake()->unique()->safeEmail(),
             'plan' => 'max-20x',
         ];
     }

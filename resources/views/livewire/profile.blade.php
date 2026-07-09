@@ -50,7 +50,7 @@
         @if ($account)
             <div>
                 <h3 class="text-xs uppercase tracking-wide text-gray-500 mb-2">
-                    My account — {{ $account->name }}
+                    My account — {{ $account->email }}
                     <span class="text-gray-400">({{ $account->plan }}, {{ $account->users()->count() }} members)</span>
                 </h3>
                 <dl class="grid grid-cols-3 gap-4 text-center">

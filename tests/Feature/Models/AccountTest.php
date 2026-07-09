@@ -7,7 +7,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 uses(RefreshDatabase::class);
 
 test('an account has many member users', function () {
-    $account = Account::factory()->create(['name' => 'Team A', 'plan' => 'max-20x']);
+    $account = Account::factory()->create(['email' => 'team-a@example.com', 'plan' => 'max-20x']);
     User::factory()->count(3)->create(['account_id' => $account->id]);
     User::factory()->create(); // unassigned
 

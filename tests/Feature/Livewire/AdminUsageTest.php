@@ -27,7 +27,7 @@ test('admin users can view the admin usage page', function () {
 });
 
 test('admin usage renders account and user rows with token figures', function () {
-    $account = Account::factory()->create(['name' => 'Team A', 'plan' => 'max-20x']);
+    $account = Account::factory()->create(['email' => 'team-a@example.com', 'plan' => 'max-20x']);
     $member = User::factory()->create(['account_id' => $account->id, 'slack_handle' => 'member-one']);
     $admin = User::factory()->create(['is_admin' => true, 'slack_handle' => 'the-admin', 'account_id' => $account->id]);
 
@@ -36,7 +36,7 @@ test('admin usage renders account and user rows with token figures', function ()
     $this->actingAs($admin)
         ->get('/admin/usage')
         ->assertOk()
-        ->assertSee('Team A')
+        ->assertSee('team-a@example.com')
         ->assertSee('member-one')
         ->assertSee(number_format(1234));
 });

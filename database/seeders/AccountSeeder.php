@@ -17,7 +17,7 @@ class AccountSeeder extends Seeder
 
         foreach ($unassigned->chunk(5) as $index => $chunk) {
             $account = Account::create([
-                'name' => 'Team '.($index + 1),
+                'email' => 'account'.($index + 1).'@example.com',
                 'plan' => 'max-20x',
             ]);
 

@@ -17,7 +17,7 @@
             <tbody class="divide-y divide-gray-200">
                 @foreach ($accounts as $row)
                     <tr>
-                        <td class="py-2 font-medium">{{ $row['name'] }}</td>
+                        <td class="py-2 font-medium">{{ $row['email'] }}</td>
                         <td class="text-gray-500">{{ $row['plan'] ?? '—' }}</td>
                         <td class="text-right font-mono">{{ $row['memberCount'] }}</td>
                         <td class="text-right font-mono">{{ number_format($row['hourly']) }}</td>
@@ -52,7 +52,7 @@
                                 {{ $row['handle'] }}
                             </span>
                         </td>
-                        <td class="text-gray-500">{{ $row['account_name'] ?? '—' }}</td>
+                        <td class="text-gray-500">{{ $row['account_email'] ?? '—' }}</td>
                         <td class="text-right font-mono">{{ number_format($row['hourly']) }}</td>
                         <td class="text-right font-mono">{{ number_format($row['daily']) }}</td>
                         <td class="text-right font-mono">{{ number_format($row['monthly']) }}</td>
