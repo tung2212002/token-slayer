@@ -19,8 +19,20 @@ use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 
+/**
+ * Registers the `/admin` Filament panel — account CRUD, member management,
+ * and (in later phases) quota/usage dashboards. Access is gated by
+ * `User::canAccessPanel()` (requires `is_admin`).
+ */
 class AdminPanelProvider extends PanelProvider
 {
+    /**
+     * Configure the admin panel: id/path, discovered resources/pages/widgets,
+     * and the middleware stack Filament needs for auth/session handling.
+     *
+     * @param  Panel  $panel  the panel instance being configured
+     * @return Panel
+     */
     public function panel(Panel $panel): Panel
     {
         return $panel
