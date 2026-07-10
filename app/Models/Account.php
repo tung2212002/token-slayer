@@ -9,6 +9,8 @@ use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Facades\Cache;
 
 #[Hidden(['oauth_access_token', 'oauth_refresh_token'])]
@@ -52,6 +54,29 @@ class Account extends Model
     public function users(): BelongsToMany
     {
         return $this->belongsToMany(User::class)->withTimestamps();
+    }
+
+    /**
+     * Every quota-utilization snapshot recorded for this account by the
+     * 5-minute prober, in natural (insertion) order. Callers that need
+     * newest-first should order the query explicitly.
+     *
+     * @return HasMany<AccountUsageSnapshot, $this>
+     */
+    public function usageSnapshots(): HasMany
+    {
+        return $this->hasMany(AccountUsageSnapshot::class);
+    }
+
+    /**
+     * The most recently recorded quota-utilization snapshot for this
+     * account, resolved via `latestOfMany` on `created_at`.
+     *
+     * @return HasOne<AccountUsageSnapshot, $this>
+     */
+    public function latestUsageSnapshot(): HasOne
+    {
+        return $this->hasOne(AccountUsageSnapshot::class)->latestOfMany('created_at');
     }
 
     protected static function newFactory(): AccountFactory
