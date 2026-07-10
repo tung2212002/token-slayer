@@ -50,13 +50,16 @@ class Account extends Model
     ];
 
     /**
-     * Keep the resolver's email map in sync with account mutations.
+     * Keep the resolver's email and organization-uuid maps in sync with account mutations.
      *
      * @return void
      */
     protected static function booted(): void
     {
-        $flush = fn () => Cache::forget(AccountResolver::CACHE_KEY);
+        $flush = function (): void {
+            Cache::forget(AccountResolver::CACHE_KEY);
+            Cache::forget(AccountResolver::ORG_CACHE_KEY);
+        };
         static::saved($flush);
         static::deleted($flush);
     }

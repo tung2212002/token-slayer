@@ -34,7 +34,7 @@ class EventController extends Controller
 
         $accountEmail = $this->trimmedStringOrNull($payload['account_email'] ?? null);
         $accountSource = $this->trimmedStringOrNull($payload['account_source'] ?? null);
-        $accountId = $this->accounts->resolve($accountEmail);
+        $accountId = $this->accounts->resolve(null, $accountEmail);
         $clientVersion = $this->trimmedStringOrNull($payload['client_version'] ?? null);
 
         $hookName = $payload['hook_event_name'] ?? 'unknown';
