@@ -58,6 +58,19 @@ it('lists accounts with member count and status badge', function () {
         ->assertTableColumnStateSet('status', Account::STATUS_NEEDS_REAUTH, $account);
 });
 
+it('lets an admin set the organization uuid when editing an account', function () {
+    $admin = User::factory()->create(['is_admin' => true]);
+    $account = Account::factory()->create(['organization_uuid' => null]);
+
+    Livewire::actingAs($admin)
+        ->test(EditAccount::class, ['record' => $account->getRouteKey()])
+        ->fillForm(['organization_uuid' => 'org-12345'])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    expect($account->refresh()->organization_uuid)->toBe('org-12345');
+});
+
 it('attaches and detaches members through the relation manager', function () {
     $admin = User::factory()->create(['is_admin' => true]);
     $account = Account::factory()->create();

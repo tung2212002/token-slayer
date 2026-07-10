@@ -44,8 +44,9 @@ class AccountResource extends Resource
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
 
     /**
-     * Build the create/edit form: email, display name, plan, and (edit-only)
-     * the connection status.
+     * Build the create/edit form: email, organization UUID (auto-learned
+     * from events, or pasted manually for immediate attribution), display
+     * name, plan, and (edit-only) the connection status.
      *
      * @param  Schema  $schema  The schema being configured by Filament.
      * @return Schema
@@ -59,6 +60,11 @@ class AccountResource extends Resource
                     ->required()
                     ->unique(ignoreRecord: true)
                     ->maxLength(255),
+                TextInput::make('organization_uuid')
+                    ->label('Organization UUID')
+                    ->helperText('Auto-learned from events; paste manually to attribute switcher users immediately.')
+                    ->unique(ignoreRecord: true)
+                    ->maxLength(64),
                 TextInput::make('name')
                     ->maxLength(255),
                 TextInput::make('plan')
@@ -112,6 +118,8 @@ class AccountResource extends Resource
                     ->since()
                     ->placeholder('Never')
                     ->sortable(),
+                TextColumn::make('organization_uuid')
+                    ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
                 //
