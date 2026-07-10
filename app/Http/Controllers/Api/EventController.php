@@ -34,7 +34,8 @@ class EventController extends Controller
 
         $accountEmail = $this->trimmedStringOrNull($payload['account_email'] ?? null);
         $accountSource = $this->trimmedStringOrNull($payload['account_source'] ?? null);
-        $accountId = $this->accounts->resolve(null, $accountEmail);
+        $accountOrgId = $this->trimmedStringOrNull($payload['account_org_id'] ?? null);
+        $accountId = $this->accounts->resolve($accountOrgId, $accountEmail);
         $clientVersion = $this->trimmedStringOrNull($payload['client_version'] ?? null);
 
         $hookName = $payload['hook_event_name'] ?? 'unknown';
@@ -80,6 +81,7 @@ class EventController extends Controller
                     'account_id' => $accountId,
                     'account_email' => $accountEmail,
                     'account_source' => $accountSource,
+                    'account_org_id' => $accountOrgId,
                 ]);
 
                 $result = $this->damage->apply($user, $tokens);

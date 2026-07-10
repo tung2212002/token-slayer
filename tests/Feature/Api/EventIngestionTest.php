@@ -394,3 +394,30 @@ it('accepts legacy payloads with no attribution fields', function () {
         ->and($event->account_email)->toBeNull()
         ->and($this->user->fresh()->client_version)->toBeNull();
 });
+
+it('stores the raw account org id on the event', function () {
+    $this->withHeader('Authorization', 'Bearer tok')
+        ->postJson('/api/events', [
+            'hook_event_name' => 'Stop', 'tokens' => 100,
+            'account_org_id' => 'org-raw-x',
+        ])
+        ->assertCreated();
+
+    $event = Event::latest('id')->first();
+    expect($event->account_org_id)->toBe('org-raw-x')
+        ->and($event->account_id)->toBeNull();
+});
+
+it('attributes the event to the account matching the organization uuid', function () {
+    $account = Account::factory()->withOrganizationUuid('org-match-1')->create();
+
+    $this->withHeader('Authorization', 'Bearer tok')
+        ->postJson('/api/events', [
+            'hook_event_name' => 'Stop', 'tokens' => 100,
+            'account_org_id' => 'org-match-1',
+        ])
+        ->assertCreated();
+
+    $event = Event::latest('id')->first();
+    expect($event->account_id)->toBe($account->id);
+});
