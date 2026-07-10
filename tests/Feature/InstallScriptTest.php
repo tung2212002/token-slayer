@@ -184,3 +184,68 @@ it('prunes old send-hook.sh backups to the newest 3', function () {
     expect($script)
         ->toContain('ls -1t "$HOME/.config/token_slayer"/send-hook.sh.bak.* 2>/dev/null | tail -n +4 | xargs rm -f --');
 });
+
+it('skips account resolution entirely for non-Claude providers', function () {
+    $script = $this->get(route('install-script'))->content();
+
+    expect($script)->toContain('[ -n "${PROVIDER:-}" ]');
+
+    $guardPosition = strpos($script, '[ -n "${PROVIDER:-}" ]');
+    $resolveDefinitionPosition = strpos($script, 'resolve_account() {');
+
+    expect($guardPosition)->not->toBeFalse()
+        ->and($resolveDefinitionPosition)->not->toBeFalse()
+        ->and($guardPosition)->toBeGreaterThan($resolveDefinitionPosition);
+});
+
+it('sends an org-id beacon request that costs zero tokens and never touches quota', function () {
+    $script = $this->get(route('install-script'))->content();
+
+    expect($script)
+        ->toContain('"max_tokens":0')
+        ->toContain('https://api.anthropic.com/v1/messages')
+        ->toContain('claude-haiku-4-5-20251001');
+});
+
+it('parses the anthropic-organization-id response header from the beacon', function () {
+    $script = $this->get(route('install-script'))->content();
+
+    expect($script)
+        ->toContain('anthropic-organization-id')
+        ->toContain("grep -i '^anthropic-organization-id:'");
+});
+
+it('uses the x-api-key header for the beacon when only an API key is available', function () {
+    $script = $this->get(route('install-script'))->content();
+
+    expect($script)->toContain('ANTHROPIC_API_KEY')
+        ->and($script)->toContain('x-api-key');
+});
+
+it('negatively caches identity lookups so repeat events skip the network', function () {
+    $script = $this->get(route('install-script'))->content();
+
+    expect($script)
+        ->toContain('restricted')
+        ->toContain('identity-cache.json')
+        ->toContain('checked_at');
+});
+
+it('merges account_org_id into the outgoing event body when resolved', function () {
+    $script = $this->get(route('install-script'))->content();
+
+    expect($script)->toContain('account_org_id');
+
+    $bodyAssignPosition = strpos($script, 'BODY=$(printf \'%s\' "$BODY" | jq -c --arg e "$ACC_EMAIL"');
+    expect($bodyAssignPosition)->not->toBeFalse();
+
+    $mergeBlock = substr($script, $bodyAssignPosition, 700);
+    expect($mergeBlock)->toContain('account_org_id');
+});
+
+it('bumps the client version to 3 for the org-id beacon rollout', function () {
+    $script = $this->get(route('install-script'))->content();
+
+    expect(config('token_slayer.client_version'))->toBe('3')
+        ->and($script)->toContain("CLIENT_VERSION='3'");
+});

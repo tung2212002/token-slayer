@@ -98,6 +98,11 @@ sha256() { if command -v sha256sum >/dev/null 2>&1; then sha256sum | cut -d' ' -
 
 current_access_token() {
   # Same lookup order Claude Code uses; hooks inherit CLAUDE_CONFIG_DIR.
+  # CLAUDE_CODE_OAUTH_TOKEN (CI/automation) takes priority over on-disk credentials.
+  if [ -n "${CLAUDE_CODE_OAUTH_TOKEN:-}" ]; then
+    printf '%s' "$CLAUDE_CODE_OAUTH_TOKEN"
+    return
+  fi
   for f in "${CLAUDE_CONFIG_DIR:-}/.credentials.json" "$HOME/.claude/.credentials.json"; do
     [ -r "$f" ] || continue
     jq -r '.claudeAiOauth.accessToken // ""' "$f" 2>/dev/null && return
@@ -108,8 +113,24 @@ current_access_token() {
   fi
 }
 
+beacon_org_id() {
+  # $1 = full auth header value, e.g. "Authorization: Bearer xxx" or "x-api-key: xxx".
+  # Deliberately-invalid inference request: max_tokens=0 and empty messages -> HTTP
+  # 400, zero token cost, touches no quota, and works with bare inference scope
+  # (including setup-tokens, which get a permanent 403 from /api/oauth/profile). The
+  # response headers still carry the org UUID that owns the token.
+  curl -si --max-time 5 "https://api.anthropic.com/v1/messages" \
+    -H "$1" \
+    -H "anthropic-version: 2023-06-01" -H "content-type: application/json" \
+    -d '{"model":"claude-haiku-4-5-20251001","max_tokens":0,"messages":[]}' 2>/dev/null \
+    | grep -i '^anthropic-organization-id:' | awk '{print $2}' | tr -d '\r'
+}
+
 resolve_account() {
-  ACC_EMAIL="" ACC_UUID="" ACC_SOURCE=""
+  ACC_EMAIL="" ACC_UUID="" ACC_SOURCE="" ACC_ORG_ID=""
+
+  # 0. Non-Claude providers (codex/antigravity) never carry Claude account claims.
+  [ -n "${PROVIDER:-}" ] && return
 
   # 1. Manual override wins unconditionally.
   if [ -r "$NS_DIR/account.json" ]; then
@@ -118,37 +139,87 @@ resolve_account() {
     [ -n "$ACC_EMAIL" ] && { ACC_SOURCE="manual"; return; }
   fi
 
-  # 0. Proxy detect: base URL rerouted -> client cannot know the account. Don't guess.
+  # 2. Proxy detect: base URL rerouted -> client cannot know the account. Don't guess,
+  #    and don't beacon a URL that isn't api.anthropic.com.
   case "${ANTHROPIC_BASE_URL:-}" in
     ""|*api.anthropic.com*) ;;
     *) ACC_SOURCE="proxy"; ACC_EMAIL=""; ACC_UUID=""; return ;;
   esac
 
-  # 2. Credential identity: fingerprint the live token, ask the profile API once per token.
-  TOKEN=$(current_access_token)
+  # 3. Credential identity: resolve the org UUID via a zero-cost beacon call, cached
+  #    per token fingerprint so repeat events do zero network work.
+  OAUTH_TOKEN=$(current_access_token)
+  if [ -n "$OAUTH_TOKEN" ]; then
+    TOKEN="$OAUTH_TOKEN"
+    AUTH_HEADER="Authorization: Bearer $OAUTH_TOKEN"
+  elif [ -n "${ANTHROPIC_API_KEY:-}" ]; then
+    TOKEN="$ANTHROPIC_API_KEY"
+    AUTH_HEADER="x-api-key: $ANTHROPIC_API_KEY"
+  else
+    TOKEN=""
+  fi
+
   if [ -n "$TOKEN" ]; then
     FP=$(printf '%s' "$TOKEN" | sha256)
     CACHE="$NS_DIR/identity-cache.json"
+    NOW=$(date +%s)
+
+    CACHED_STATUS="" CACHED_CHECKED_AT=0
     if [ -r "$CACHE" ]; then
-      ACC_EMAIL=$(jq -r --arg fp "$FP" '.[$fp].email // ""' "$CACHE" 2>/dev/null)
-      ACC_UUID=$(jq -r --arg fp "$FP" '.[$fp].uuid // ""' "$CACHE" 2>/dev/null)
+      CACHED_STATUS=$(jq -r --arg fp "$FP" '.[$fp].status // ""' "$CACHE" 2>/dev/null)
+      CACHED_CHECKED_AT=$(jq -r --arg fp "$FP" '.[$fp].checked_at // 0' "$CACHE" 2>/dev/null)
     fi
-    if [ -z "$ACC_EMAIL" ]; then
-      PROFILE=$(curl -sf --max-time 5 "https://api.anthropic.com/api/oauth/profile" \
-        -H "Authorization: Bearer $TOKEN" -H "anthropic-beta: oauth-2025-04-20" 2>/dev/null)
-      ACC_EMAIL=$(printf '%s' "$PROFILE" | jq -r '.account.email // .account.email_address // .email // ""' 2>/dev/null)
-      ACC_UUID=$(printf '%s' "$PROFILE" | jq -r '.account.uuid // .account_uuid // ""' 2>/dev/null)
-      if [ -n "$ACC_EMAIL" ]; then
-        TMP=$(mktemp) && jq --arg fp "$FP" --arg e "$ACC_EMAIL" --arg u "$ACC_UUID" \
-          '. + {($fp): {email: $e, uuid: $u}}' "$CACHE" 2>/dev/null > "$TMP" \
-          || printf '{"%s":{"email":"%s","uuid":"%s"}}' "$FP" "$ACC_EMAIL" "$ACC_UUID" > "$TMP"
-        mv "$TMP" "$CACHE"
+    : "${CACHED_CHECKED_AT:=0}"
+
+    SHOULD_LOOKUP=1
+    case "$CACHED_STATUS" in
+      ok)
+        ACC_ORG_ID=$(jq -r --arg fp "$FP" '.[$fp].org_id // ""' "$CACHE" 2>/dev/null)
+        ACC_EMAIL=$(jq -r --arg fp "$FP" '.[$fp].email // ""' "$CACHE" 2>/dev/null)
+        ACC_UUID=$(jq -r --arg fp "$FP" '.[$fp].uuid // ""' "$CACHE" 2>/dev/null)
+        SHOULD_LOOKUP=0
+        ;;
+      restricted)
+        # Permanent negative for this fp: never beacon it again.
+        SHOULD_LOOKUP=0
+        ;;
+      error)
+        # Transient failure: retry only after an hour has passed.
+        [ $((NOW - CACHED_CHECKED_AT)) -le 3600 ] && SHOULD_LOOKUP=0
+        ;;
+    esac
+
+    if [ "$SHOULD_LOOKUP" = "1" ]; then
+      ACC_ORG_ID=$(beacon_org_id "$AUTH_HEADER")
+
+      if [ -n "$ACC_ORG_ID" ]; then
+        STATUS="ok"
+        if [ -n "$OAUTH_TOKEN" ]; then
+          # Best-effort profile lookup for email/uuid (enables server auto-learn); a
+          # 403 here is fine and just leaves email/uuid blank -- the beacon already
+          # proved identity via the org id.
+          PROFILE=$(curl -sf --max-time 5 "https://api.anthropic.com/api/oauth/profile" \
+            -H "Authorization: Bearer $OAUTH_TOKEN" -H "anthropic-beta: oauth-2025-04-20" 2>/dev/null)
+          ACC_EMAIL=$(printf '%s' "$PROFILE" | jq -r '.account.email // .account.email_address // .email // ""' 2>/dev/null)
+          ACC_UUID=$(printf '%s' "$PROFILE" | jq -r '.account.uuid // .account_uuid // ""' 2>/dev/null)
+        fi
+      else
+        STATUS="error"
       fi
+
+      TMP=$(mktemp) && jq --arg fp "$FP" --arg o "$ACC_ORG_ID" --arg e "$ACC_EMAIL" \
+        --arg u "$ACC_UUID" --arg st "$STATUS" --argjson t "$NOW" \
+        '. + {($fp): {org_id: $o, email: $e, uuid: $u, status: $st, checked_at: $t}}' \
+        "$CACHE" 2>/dev/null > "$TMP" \
+        || printf '{"%s":{"org_id":"%s","email":"%s","uuid":"%s","status":"%s","checked_at":%s}}' \
+             "$FP" "$ACC_ORG_ID" "$ACC_EMAIL" "$ACC_UUID" "$STATUS" "$NOW" > "$TMP"
+      mv "$TMP" "$CACHE"
     fi
-    [ -n "$ACC_EMAIL" ] && { ACC_SOURCE="credential"; return; }
+
+    [ -n "$ACC_ORG_ID" ] && { ACC_SOURCE="credential"; return; }
   fi
 
-  # 3. Fallback: oauthAccount (may be stale under external switchers).
+  # 4. Fallback: oauthAccount (may be stale under external switchers).
   CJ="${CLAUDE_CONFIG_DIR:-$HOME}/.claude.json"
   [ -r "$CJ" ] || CJ="$HOME/.claude.json"
   if [ -r "$CJ" ]; then
@@ -161,9 +232,10 @@ resolve_account() {
 if command -v jq >/dev/null 2>&1; then
   resolve_account
   BODY=$(printf '%s' "$BODY" | jq -c --arg e "$ACC_EMAIL" --arg u "$ACC_UUID" \
-    --arg s "$ACC_SOURCE" --arg v "$CLIENT_VERSION" \
+    --arg s "$ACC_SOURCE" --arg v "$CLIENT_VERSION" --arg o "$ACC_ORG_ID" \
     '. + {client_version: $v} + (if $s != "" then {account_source: $s} else {} end)
-       + (if $e != "" then {account_email: $e, account_uuid: $u} else {} end)' \
+       + (if $e != "" then {account_email: $e, account_uuid: $u} else {} end)
+       + (if $o != "" then {account_org_id: $o} else {} end)' \
     2>/dev/null || printf '%s' "$BODY")
 fi
 
