@@ -119,3 +119,57 @@ it('sources the user custom.sh before sending', function () {
 
     expect($customShPosition)->toBeLessThan($sendPosition);
 });
+
+it('stores a sha256 checksum of send-hook.sh after writing it', function () {
+    $script = $this->get(route('install-script'))->content();
+
+    expect($script)
+        ->toContain('CHECKSUM_FILE="$HOME/.config/token_slayer/.hook-checksum"')
+        ->toContain('sha256 < "$HELPER" > "$CHECKSUM_FILE"');
+});
+
+it('compares the existing send-hook.sh against the stored checksum before overwriting', function () {
+    $script = $this->get(route('install-script'))->content();
+
+    expect($script)
+        ->toContain('if [ -f "$HELPER" ]')
+        ->toContain('OLD_SHA=$(sha256 < "$HELPER")')
+        ->toContain('STORED_SHA=$(cat "$CHECKSUM_FILE")')
+        ->toContain('[ -z "$STORED_SHA" ] || [ "$OLD_SHA" != "$STORED_SHA" ]');
+
+    $compareBlockPosition = strpos($script, 'if [ -f "$HELPER" ]');
+    $overwritePosition = strpos($script, "cat > \"\$HELPER\" <<'HOOK_SH'");
+
+    expect($compareBlockPosition)->toBeLessThan($overwritePosition);
+});
+
+it('backs up a hand-modified send-hook.sh before overwriting it', function () {
+    $script = $this->get(route('install-script'))->content();
+
+    expect($script)
+        ->toContain('HOOK_BACKUP="$HELPER.bak.$(date +%Y%m%d%H%M%S)"')
+        ->toContain('cp "$HELPER" "$HOOK_BACKUP"');
+
+    $backupPosition = strpos($script, 'HOOK_BACKUP="$HELPER.bak.$(date +%Y%m%d%H%M%S)"');
+    $overwritePosition = strpos($script, "cat > \"\$HELPER\" <<'HOOK_SH'");
+
+    expect($backupPosition)->toBeLessThan($overwritePosition);
+});
+
+it('warns loudly and points to custom.sh when a hand-modified hook was backed up', function () {
+    $script = $this->get(route('install-script'))->content();
+
+    expect($script)
+        ->toContain('if [ -n "$HOOK_BACKUP" ]')
+        ->toContain('WARNING')
+        ->toContain('backup saved to: $HOOK_BACKUP')
+        ->toContain('~/.config/token_slayer/custom.sh')
+        ->toContain('survives every update');
+});
+
+it('prunes old send-hook.sh backups to the newest 3', function () {
+    $script = $this->get(route('install-script'))->content();
+
+    expect($script)
+        ->toContain('ls -1t "$HOME/.config/token_slayer"/send-hook.sh.bak.* 2>/dev/null | tail -n +4 | xargs rm -f --');
+});

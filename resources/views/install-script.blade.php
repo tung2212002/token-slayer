@@ -30,6 +30,24 @@ mkdir -p "$HOME/.config/{{ $namespace }}"
 # parsed from the local Claude transcript (requires jq when available),
 # because the server cannot read the user's filesystem.
 HELPER="$HOME/.config/{{ $namespace }}/send-hook.sh"
+CHECKSUM_FILE="$HOME/.config/{{ $namespace }}/.hook-checksum"
+
+sha256() { sha256sum 2>/dev/null | cut -d' ' -f1 || shasum -a 256 | cut -d' ' -f1; }
+
+# If an existing send-hook.sh no longer matches the checksum of the last
+# stock install (or predates checksum tracking entirely), assume the user
+# hand-edited it and back it up before we overwrite it below.
+HOOK_BACKUP=""
+if [ -f "$HELPER" ]; then
+    OLD_SHA=$(sha256 < "$HELPER")
+    STORED_SHA=""
+    [ -r "$CHECKSUM_FILE" ] && STORED_SHA=$(cat "$CHECKSUM_FILE")
+    if [ -z "$STORED_SHA" ] || [ "$OLD_SHA" != "$STORED_SHA" ]; then
+        HOOK_BACKUP="$HELPER.bak.$(date +%Y%m%d%H%M%S)"
+        cp "$HELPER" "$HOOK_BACKUP"
+    fi
+fi
+
 cat > "$HELPER" <<'HOOK_SH'
 #!/usr/bin/env bash
 set -u
@@ -158,6 +176,28 @@ curl -s --max-time 3 -X POST "$URL" \
   -d "$BODY" >/dev/null 2>&1 &
 HOOK_SH
 chmod +x "$HELPER"
+
+sha256 < "$HELPER" > "$CHECKSUM_FILE"
+
+# Keep only the 3 most recent backups so a long-lived install doesn't
+# accumulate one file per update.
+ls -1t "$HOME/.config/{{ $namespace }}"/send-hook.sh.bak.* 2>/dev/null | tail -n +4 | xargs rm -f --
+
+if [ -n "$HOOK_BACKUP" ]; then
+    echo ""
+    echo "=========================================================="
+    echo "WARNING: your existing send-hook.sh had local modifications"
+    echo "and has been overwritten by this install."
+    echo ""
+    echo "  backup saved to: $HOOK_BACKUP"
+    echo ""
+    echo "Move your customizations into:"
+    echo "  ~/.config/{{ $namespace }}/custom.sh"
+    echo "That file is sourced automatically on every hook run and"
+    echo "survives every update -- edits to send-hook.sh itself do not."
+    echo "=========================================================="
+    echo ""
+fi
 
 printf '%s' "{{ $clientVersion }}" > "$HOME/.config/{{ $namespace }}/version"
 
