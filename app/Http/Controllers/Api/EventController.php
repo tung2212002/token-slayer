@@ -11,6 +11,7 @@ use App\Events\HitDealt;
 use App\Http\Controllers\Controller;
 use App\Models\Boss;
 use App\Models\Event;
+use App\Services\AccountResolver;
 use App\Services\DamageService;
 use App\Services\FighterChargingCache;
 use App\Services\TranscriptReader;
@@ -23,6 +24,7 @@ class EventController extends Controller
         private DamageService $damage,
         private TranscriptReader $transcripts,
         private FighterChargingCache $chargingCache,
+        private AccountResolver $accounts,
     ) {}
 
     public function store(Request $request): JsonResponse
@@ -30,12 +32,20 @@ class EventController extends Controller
         $user = $request->user('hook');
         $payload = $request->all();
 
+        $accountEmail = $this->trimmedStringOrNull($payload['account_email'] ?? null);
+        $accountSource = $this->trimmedStringOrNull($payload['account_source'] ?? null);
+        $accountId = $this->accounts->resolve($accountEmail);
+        $clientVersion = $this->trimmedStringOrNull($payload['client_version'] ?? null);
+
         $hookName = $payload['hook_event_name'] ?? 'unknown';
         $eventType = $this->normalizeEventType($hookName);
         $provider = $request->query('provider', 'claude-code');
         $tokens = $this->resolveStopTokens($eventType, $payload);
 
-        $user->forceFill(['last_event_at' => now()])->save();
+        $user->forceFill([
+            'last_event_at' => now(),
+            'client_version' => $clientVersion ?? $user->client_version,
+        ])->save();
 
         if ($eventType === 'user-prompt-submit' || $eventType === 'pre-invocation') {
             $this->chargingCache->put($user->id, 'thinking…');
@@ -67,6 +77,9 @@ class EventController extends Controller
                     'provider' => $provider,
                     'tokens' => $tokens,
                     'session_id' => $payload['session_id'] ?? null,
+                    'account_id' => $accountId,
+                    'account_email' => $accountEmail,
+                    'account_source' => $accountSource,
                 ]);
 
                 $result = $this->damage->apply($user, $tokens);
@@ -199,5 +212,21 @@ class EventController extends Controller
     private function dispatchSafely(object $event): void
     {
         rescue(fn () => event($event));
+    }
+
+    /**
+     * Normalize an incoming payload string: trimmed non-empty string or null.
+     *
+     * @param  mixed  $value
+     * @return ?string
+     */
+    private function trimmedStringOrNull(mixed $value): ?string
+    {
+        if (! is_string($value)) {
+            return null;
+        }
+        $trimmed = trim($value);
+
+        return $trimmed === '' ? null : mb_substr($trimmed, 0, 255);
     }
 }

@@ -347,3 +347,50 @@ it('persists attribution columns on events when provided directly', function () 
     expect($event->fresh()->account_id)->toBe($account->id)
         ->and($event->fresh()->account_source)->toBe('credential');
 });
+
+it('attributes a stop event to the matching org account', function () {
+    $account = Account::factory()->create(['email' => 'org@ownego.com']);
+
+    $this->withHeader('Authorization', 'Bearer tok')
+        ->postJson('/api/events', [
+            'hook_event_name' => 'Stop',
+            'tokens' => 500,
+            'account_email' => 'ORG@ownego.com',
+            'account_uuid' => 'uuid-1',
+            'account_source' => 'credential',
+            'client_version' => '2',
+        ])
+        ->assertCreated();
+
+    $event = Event::latest('id')->first();
+    expect($event->account_id)->toBe($account->id)
+        ->and($event->account_email)->toBe('ORG@ownego.com')
+        ->and($event->account_source)->toBe('credential')
+        ->and($this->user->fresh()->client_version)->toBe('2');
+});
+
+it('records unknown account emails with a null account id', function () {
+    $this->withHeader('Authorization', 'Bearer tok')
+        ->postJson('/api/events', [
+            'hook_event_name' => 'Stop', 'tokens' => 100,
+            'account_email' => 'personal@gmail.com', 'account_source' => 'auto',
+        ])
+        ->assertCreated();
+
+    $event = Event::latest('id')->first();
+    expect($event->account_id)->toBeNull()
+        ->and($event->account_email)->toBe('personal@gmail.com');
+});
+
+it('accepts legacy payloads with no attribution fields', function () {
+    $this->withHeader('Authorization', 'Bearer tok')
+        ->postJson('/api/events', [
+            'hook_event_name' => 'Stop', 'tokens' => 100,
+        ])
+        ->assertCreated();
+
+    $event = Event::latest('id')->first();
+    expect($event->account_id)->toBeNull()
+        ->and($event->account_email)->toBeNull()
+        ->and($this->user->fresh()->client_version)->toBeNull();
+});
