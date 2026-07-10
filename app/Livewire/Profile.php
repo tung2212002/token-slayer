@@ -33,9 +33,12 @@ class Profile extends Component
             'user' => auth()->user(),
             'damageTotals' => app(DamageTotals::class)->forUser(auth()->user()),
             'globalUsage' => app(DamageTotals::class)->global(),
-            'account' => auth()->user()->account,
-            'accountUsage' => auth()->user()->account
-                ? app(DamageTotals::class)->forAccount(auth()->user()->account)
+            // TODO(Task 9): replace this single-account stand-in with the
+            // multi-account `forUserByAccount()` breakdown; kept minimal here
+            // only to survive the `users.account_id` column drop (Task 7).
+            'account' => auth()->user()->accounts->first(),
+            'accountUsage' => auth()->user()->accounts->first()
+                ? app(DamageTotals::class)->forAccount(auth()->user()->accounts->first())
                 : null,
             'claudeSnippet' => view('partials.claude-snippet', [
                 'baseUrl' => url('/api/events'),

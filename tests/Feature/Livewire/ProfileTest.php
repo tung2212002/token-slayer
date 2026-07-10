@@ -169,7 +169,7 @@ test('profile shows community and personal usage across hourly, daily, monthly',
 
 test('profile shows the my-account block when the user has an account', function () {
     $account = Account::factory()->create(['email' => 'team-rocket@example.com', 'plan' => 'max-20x']);
-    $user = User::factory()->create(['account_id' => $account->id]);
+    $user = User::factory()->create();
     $account->users()->attach([$user->id, User::factory()->create()->id]);
     $this->actingAs($user);
 
@@ -183,7 +183,7 @@ test('profile shows the my-account block when the user has an account', function
 });
 
 test('profile hides the my-account block when the user has no account', function () {
-    $user = User::factory()->create(['account_id' => null]);
+    $user = User::factory()->create();
     $this->actingAs($user);
 
     $this->get('/profile')

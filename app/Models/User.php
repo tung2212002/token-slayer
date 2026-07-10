@@ -7,7 +7,6 @@ use App\Enums\FighterCharacter;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -25,7 +24,6 @@ class User extends Authenticatable
      */
     protected $fillable = [
         'name',
-        'account_id',
         'email',
         'password',
         'slack_user_id',
@@ -60,11 +58,6 @@ class User extends Authenticatable
     public function characterForBoss(?int $bossId): string
     {
         return FighterCharacter::forUserAndBoss($this->id, $bossId)->value;
-    }
-
-    public function account(): BelongsTo
-    {
-        return $this->belongsTo(Account::class);
     }
 
     /**
