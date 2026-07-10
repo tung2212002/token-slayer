@@ -3,7 +3,9 @@
 namespace App\Services;
 
 use App\Models\Account;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 
 final class AccountResolver
 {
@@ -46,7 +48,12 @@ final class AccountResolver
             return $byOrg;
         }
 
-        return $this->resolveByEmail($email);
+        $byEmail = $this->resolveByEmail($email);
+        if ($byEmail !== null && $orgId !== null && trim($orgId) !== '') {
+            $this->learnOrganizationUuid($byEmail, trim($orgId));
+        }
+
+        return $byEmail;
     }
 
     /**
@@ -93,5 +100,44 @@ final class AccountResolver
         });
 
         return $map[mb_strtolower(trim($email))] ?? null;
+    }
+
+    /**
+     * Teach the resolver an account's organization uuid after an email-matched
+     * claim carried one. Leaves an already-set differing uuid untouched and
+     * logs the conflict instead of overwriting a beacon-verified value.
+     *
+     * @param  int  $accountId  the account matched by email
+     * @param  string  $orgId  the organization uuid claimed alongside the email
+     * @return void
+     */
+    private function learnOrganizationUuid(int $accountId, string $orgId): void
+    {
+        $account = Account::query()->find($accountId);
+        if ($account === null || $account->organization_uuid === $orgId) {
+            return;
+        }
+
+        if ($account->organization_uuid !== null) {
+            Log::warning('Refusing to overwrite account organization uuid: mismatch between stored and claimed value.', [
+                'account_id' => $accountId,
+                'existing_organization_uuid' => $account->organization_uuid,
+                'claimed_organization_uuid' => $orgId,
+            ]);
+
+            return;
+        }
+
+        $account->organization_uuid = $orgId;
+
+        try {
+            // Two concurrent email-matched claims can both see organization_uuid
+            // as null and race to learn it; the unique constraint on
+            // organization_uuid makes the losing save throw, which we treat as
+            // already-learned rather than a failure.
+            $account->save();
+        } catch (QueryException) {
+            return;
+        }
     }
 }

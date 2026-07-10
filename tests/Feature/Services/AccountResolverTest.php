@@ -3,8 +3,26 @@
 use App\Models\Account;
 use App\Services\AccountResolver;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Log;
 
 uses(RefreshDatabase::class);
+
+it('learns the organization uuid from an email-matched claim', function (): void {
+    $account = Account::factory()->create(['email' => 'a@x.com']);
+
+    app(AccountResolver::class)->resolve('org-new', 'a@x.com');
+
+    expect($account->fresh()->organization_uuid)->toBe('org-new');
+});
+
+it('never overwrites a differing organization uuid and logs the conflict', function (): void {
+    Log::shouldReceive('warning')->once();
+    $account = Account::factory()->withOrganizationUuid('org-a')->create(['email' => 'a@x.com']);
+
+    expect(app(AccountResolver::class)->resolve('org-b', 'a@x.com'))->toBe($account->id);
+
+    expect($account->fresh()->organization_uuid)->toBe('org-a');
+});
 
 it('resolves a known org account email to its id', function () {
     $account = Account::factory()->create(['email' => 'Team@Ownego.com']);
