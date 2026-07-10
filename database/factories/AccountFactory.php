@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Enums\AccountStatus;
 use App\Models\Account;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
@@ -35,7 +36,7 @@ class AccountFactory extends Factory
             'oauth_access_token' => 'sk-ant-oat01-'.Str::random(24),
             'oauth_refresh_token' => 'sk-ant-ort01-'.Str::random(24),
             'oauth_expires_at' => now()->addHours(8),
-            'status' => Account::STATUS_ACTIVE,
+            'status' => AccountStatus::Active,
         ]);
     }
 
@@ -47,7 +48,7 @@ class AccountFactory extends Factory
     public function needsReauth(): static
     {
         return $this->connected()->state(fn (): array => [
-            'status' => Account::STATUS_NEEDS_REAUTH,
+            'status' => AccountStatus::NeedsReauth,
             'probe_error' => 'refresh token expired',
         ]);
     }

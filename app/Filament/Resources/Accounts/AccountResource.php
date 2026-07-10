@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Accounts;
 
+use App\Enums\AccountStatus;
 use App\Filament\Resources\Accounts\Pages\CreateAccount;
 use App\Filament\Resources\Accounts\Pages\EditAccount;
 use App\Filament\Resources\Accounts\Pages\ListAccounts;
@@ -72,11 +73,7 @@ class AccountResource extends Resource
                     ->default('max-20x')
                     ->maxLength(255),
                 Select::make('status')
-                    ->options([
-                        Account::STATUS_ACTIVE => 'Active',
-                        Account::STATUS_NEEDS_REAUTH => 'Needs reauth',
-                        Account::STATUS_DISABLED => 'Disabled',
-                    ])
+                    ->options(AccountStatus::class)
                     ->required()
                     ->hiddenOn('create'),
             ]);
@@ -107,13 +104,7 @@ class AccountResource extends Resource
                     ->label('Members')
                     ->sortable(),
                 TextColumn::make('status')
-                    ->badge()
-                    ->color(fn (string $state): string => match ($state) {
-                        Account::STATUS_ACTIVE => 'success',
-                        Account::STATUS_NEEDS_REAUTH => 'danger',
-                        Account::STATUS_DISABLED => 'gray',
-                        default => 'gray',
-                    }),
+                    ->badge(),
                 TextColumn::make('last_probed_at')
                     ->since()
                     ->placeholder('Never')

@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\AccountStatus;
 use App\Filament\Resources\Accounts\Pages\CreateAccount;
 use App\Filament\Resources\Accounts\Pages\EditAccount;
 use App\Filament\Resources\Accounts\Pages\ListAccounts;
@@ -55,7 +56,7 @@ it('lists accounts with member count and status badge', function () {
         ->assertOk()
         ->assertCanSeeTableRecords([$account])
         ->assertTableColumnStateSet('users_count', 2, $account)
-        ->assertTableColumnStateSet('status', Account::STATUS_NEEDS_REAUTH, $account);
+        ->assertTableColumnStateSet('status', AccountStatus::NeedsReauth, $account);
 });
 
 it('lets an admin set the organization uuid when editing an account', function () {

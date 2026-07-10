@@ -73,10 +73,22 @@ class User extends Authenticatable implements FilamentUser
     }
 
     /**
+     * Single source of truth for admin authorization — the `admin` gate and
+     * Filament's panel access both delegate here so the rule can never drift
+     * between the two entry points.
+     *
+     * @return bool
+     */
+    public function isAdministrator(): bool
+    {
+        return (bool) $this->is_admin;
+    }
+
+    /**
      * @inheritDoc
      */
     public function canAccessPanel(Panel $panel): bool
     {
-        return (bool) $this->is_admin;
+        return $this->isAdministrator();
     }
 }

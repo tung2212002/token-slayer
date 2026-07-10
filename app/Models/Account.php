@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\AccountStatus;
 use App\Services\AccountResolver;
 use Database\Factories\AccountFactory;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -16,27 +17,6 @@ class Account extends Model
     /** @use HasFactory<AccountFactory> */
     use HasFactory;
 
-    /**
-     * Account is connected and probeable.
-     *
-     * @var string
-     */
-    public const string STATUS_ACTIVE = 'active';
-
-    /**
-     * Refresh token died — admin must re-run the Connect flow.
-     *
-     * @var string
-     */
-    public const string STATUS_NEEDS_REAUTH = 'needs_reauth';
-
-    /**
-     * Soft-disabled by admin; prober skips it.
-     *
-     * @var string
-     */
-    public const string STATUS_DISABLED = 'disabled';
-
     protected $guarded = [];
 
     /**
@@ -46,7 +26,7 @@ class Account extends Model
      * @var array<string, mixed>
      */
     protected $attributes = [
-        'status' => self::STATUS_ACTIVE,
+        'status' => AccountStatus::Active->value,
     ];
 
     /**
@@ -87,6 +67,7 @@ class Account extends Model
     protected function casts(): array
     {
         return [
+            'status' => AccountStatus::class,
             'oauth_access_token' => 'encrypted',
             'oauth_refresh_token' => 'encrypted',
             'oauth_expires_at' => 'datetime',

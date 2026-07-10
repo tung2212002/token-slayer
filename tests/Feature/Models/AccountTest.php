@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\AccountStatus;
 use App\Models\Account;
 use App\Models\User;
 use Illuminate\Database\QueryException;
@@ -32,15 +33,22 @@ it('stores oauth tokens encrypted at rest', function () {
 it('defaults new accounts to active status with no probe state', function () {
     $account = Account::factory()->create();
 
-    expect($account->status)->toBe(Account::STATUS_ACTIVE)
+    expect($account->status)->toBe(AccountStatus::Active)
         ->and($account->oauth_access_token)->toBeNull()
         ->and($account->last_probed_at)->toBeNull();
+});
+
+it('casts status to the AccountStatus enum backed by its stored value', function () {
+    $account = Account::factory()->needsReauth()->create();
+
+    expect($account->fresh()->status)->toBe(AccountStatus::NeedsReauth)
+        ->and($account->fresh()->status->value)->toBe('needs_reauth');
 });
 
 it('has a needsReauth factory state', function () {
     $account = Account::factory()->needsReauth()->create();
 
-    expect($account->status)->toBe(Account::STATUS_NEEDS_REAUTH)
+    expect($account->status)->toBe(AccountStatus::NeedsReauth)
         ->and($account->probe_error)->not->toBeNull();
 });
 
