@@ -8,6 +8,19 @@ test('a range of 48 hours or less buckets hourly', function () {
     expect($f->bucket)->toBe('hour');
 });
 
+test('a blank account, provider or user filter means no filter (show all)', function () {
+    $f = UsageFilters::fromPageFilters([
+        'range' => '7d',
+        'account_id' => '',
+        'provider' => '',
+        'user_id' => '',
+    ]);
+
+    expect($f->accountId)->toBeNull()
+        ->and($f->provider)->toBeNull()
+        ->and($f->userId)->toBeNull();
+});
+
 test('a range longer than 48 hours buckets daily', function () {
     $f = new UsageFilters(now()->subDays(7), now(), null, null, null);
 

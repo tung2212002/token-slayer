@@ -84,7 +84,7 @@ class UsageAnalytics extends Page
                     ->options(fn (): array => User::orderBy('name')->pluck('name', 'id')->all())
                     ->searchable()
                     ->placeholder('All users'),
-            ])->columns(['default' => 1, 'lg' => 2]),
+            ])->columns(['default' => 1, 'md' => 2]),
         ]);
     }
 

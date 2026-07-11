@@ -85,9 +85,22 @@ final class UsageFilters
         return new self(
             $from,
             $to,
-            isset($filters['account_id']) ? (int) $filters['account_id'] : null,
-            $filters['provider'] ?? null,
-            isset($filters['user_id']) ? (int) $filters['user_id'] : null,
+            self::intOrNull($filters['account_id'] ?? null),
+            ($filters['provider'] ?? null) ?: null,
+            self::intOrNull($filters['user_id'] ?? null),
         );
+    }
+
+    /**
+     * Coerce a raw filter value to a positive int, or null when it is absent
+     * or blank. A Filament select cleared back to its placeholder submits an
+     * empty string, which must mean "no filter" (show all), not id 0.
+     *
+     * @param  mixed  $value  the raw filter value
+     * @return ?int the int id, or null when absent/blank
+     */
+    private static function intOrNull(mixed $value): ?int
+    {
+        return ($value === null || $value === '') ? null : (int) $value;
     }
 }
