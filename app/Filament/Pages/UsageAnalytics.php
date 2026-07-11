@@ -2,6 +2,7 @@
 
 namespace App\Filament\Pages;
 
+use App\Filament\Widgets\ActivityHeatmap;
 use App\Filament\Widgets\TokenVolumeChart;
 use App\Filament\Widgets\TopAccountsLeaderboard;
 use App\Filament\Widgets\TopUsersLeaderboard;
@@ -98,6 +99,7 @@ class UsageAnalytics extends Page
             TokenVolumeChart::class,
             TopUsersLeaderboard::class,
             TopAccountsLeaderboard::class,
+            ActivityHeatmap::class,
         ];
     }
 }

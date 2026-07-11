@@ -1,5 +1,6 @@
 <?php
 
+use App\Filament\Widgets\ActivityHeatmap;
 use App\Filament\Widgets\TokenVolumeChart;
 use App\Filament\Widgets\TopAccountsLeaderboard;
 use App\Filament\Widgets\TopUsersLeaderboard;
@@ -32,4 +33,11 @@ test('the top accounts leaderboard renders', function () {
     Event::factory()->for($user)->create(['account_id' => $account->id, 'tokens' => 500, 'created_at' => now()->subDay()]);
 
     Livewire::test(TopAccountsLeaderboard::class, ['filters' => ['range' => '7d']])->assertOk();
+});
+
+test('the activity heatmap widget renders', function () {
+    $user = User::factory()->create();
+    Event::factory()->for($user)->create(['tokens' => 500, 'created_at' => now()->subDay()]);
+
+    Livewire::test(ActivityHeatmap::class)->assertOk();
 });
