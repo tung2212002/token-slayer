@@ -33,14 +33,18 @@ class Account extends Model
     ];
 
     /**
-     * Keep the resolver's email and organization-uuid maps in sync with account mutations.
+     * Keep the resolver's email and organization-uuid maps, and this
+     * account's membership aggregate + ingest pair caches, in sync with
+     * account mutations.
      *
      * @return void
      */
     protected static function booted(): void
     {
-        $flush = function (): void {
+        $flush = function (Account $account): void {
             CacheKeys::forgetAccountMaps();
+            CacheKeys::forgetAccountMembership($account->id);
+            CacheKeys::forgetMembershipPairs($account->id);
         };
         static::saved($flush);
         static::deleted($flush);
