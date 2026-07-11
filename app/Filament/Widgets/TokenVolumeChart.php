@@ -30,6 +30,13 @@ class TokenVolumeChart extends ChartWidget
     protected int|string|array $columnSpan = 'full';
 
     /**
+     * Maximum canvas height so the full-width chart stays compact.
+     *
+     * @var string|null
+     */
+    protected ?string $maxHeight = '260px';
+
+    /**
      * Provider slug to line/fill color for the chart datasets.
      *
      * @var array<string, string>

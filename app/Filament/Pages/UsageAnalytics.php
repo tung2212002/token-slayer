@@ -84,7 +84,7 @@ class UsageAnalytics extends Page
                     ->options(fn (): array => User::orderBy('name')->pluck('name', 'id')->all())
                     ->searchable()
                     ->placeholder('All users'),
-            ])->columns(3),
+            ])->columns(['default' => 1, 'lg' => 2]),
         ]);
     }
 
@@ -97,11 +97,11 @@ class UsageAnalytics extends Page
     protected function getFooterWidgets(): array
     {
         return [
+            ActivityHeatmap::class,
+            FleetQuotaOverview::class,
             TokenVolumeChart::class,
             TopUsersLeaderboard::class,
             TopAccountsLeaderboard::class,
-            ActivityHeatmap::class,
-            FleetQuotaOverview::class,
         ];
     }
 

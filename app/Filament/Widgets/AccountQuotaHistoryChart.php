@@ -37,6 +37,13 @@ class AccountQuotaHistoryChart extends ChartWidget
     protected int|string|array $columnSpan = 'full';
 
     /**
+     * Maximum canvas height so the full-width chart stays compact.
+     *
+     * @var string|null
+     */
+    protected ?string $maxHeight = '240px';
+
+    /**
      * Build the Chart.js datasets from the account's snapshot history over
      * the last 7 days.
      *
