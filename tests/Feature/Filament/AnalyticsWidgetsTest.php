@@ -1,10 +1,12 @@
 <?php
 
 use App\Filament\Widgets\ActivityHeatmap;
+use App\Filament\Widgets\FleetQuotaOverview;
 use App\Filament\Widgets\TokenVolumeChart;
 use App\Filament\Widgets\TopAccountsLeaderboard;
 use App\Filament\Widgets\TopUsersLeaderboard;
 use App\Models\Account;
+use App\Models\AccountUsageSnapshot;
 use App\Models\Event;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -40,4 +42,15 @@ test('the activity heatmap widget renders', function () {
     Event::factory()->for($user)->create(['tokens' => 500, 'created_at' => now()->subDay()]);
 
     Livewire::test(ActivityHeatmap::class)->assertOk();
+});
+
+test('the fleet quota overview widget renders and flags a near-cap account', function () {
+    $account = Account::factory()->create(['email' => 'hot@example.com']);
+    AccountUsageSnapshot::factory()->for($account)->create([
+        'util_7d' => 92, 'reset_7d_at' => now()->addDay(), 'created_at' => now(),
+    ]);
+
+    Livewire::test(FleetQuotaOverview::class)
+        ->assertOk()
+        ->assertSee('hot@example.com');
 });
