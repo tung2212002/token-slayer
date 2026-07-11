@@ -16,6 +16,7 @@ use Filament\Pages\Dashboard\Concerns\HasFiltersForm;
 use Filament\Pages\Page;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
+use Filament\Support\Enums\Width;
 use Filament\Support\Icons\Heroicon;
 use UnitEnum;
 
@@ -48,6 +49,14 @@ class UsageAnalytics extends Page
      * @var string
      */
     protected string $view = 'filament.pages.usage-analytics';
+
+    /**
+     * Use the full page width so the filter row and the widgets span the
+     * whole content area rather than the default capped width.
+     *
+     * @var Width|string|null
+     */
+    protected Width|string|null $maxContentWidth = Width::Full;
 
     /**
      * Build the shared filter form. Values are exposed to widgets via
