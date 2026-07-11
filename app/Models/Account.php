@@ -79,6 +79,18 @@ class Account extends Model
     }
 
     /**
+     * Every usage event attributed to this org account via
+     * `events.account_id`, in natural order. Callers that need newest-first
+     * order the query explicitly.
+     *
+     * @return HasMany<Event, $this>
+     */
+    public function events(): HasMany
+    {
+        return $this->hasMany(Event::class);
+    }
+
+    /**
      * Scope to accounts the usage prober should attempt this cycle: not
      * soft-disabled, not already known to have a dead refresh token
      * (`NeedsReauth` accounts are skipped until reconnected), and holding
