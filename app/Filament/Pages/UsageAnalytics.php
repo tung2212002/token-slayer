@@ -14,7 +14,6 @@ use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
 use Filament\Pages\Dashboard\Concerns\HasFiltersForm;
 use Filament\Pages\Page;
-use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Support\Enums\Width;
 use Filament\Support\Icons\Heroicon;
@@ -67,8 +66,9 @@ class UsageAnalytics extends Page
      */
     public function filtersForm(Schema $schema): Schema
     {
-        return $schema->components([
-            Section::make()->schema([
+        return $schema
+            ->columns(['default' => 1, 'sm' => 2, 'lg' => 4])
+            ->components([
                 Select::make('range')
                     ->options([
                         '24h' => 'Last 24 hours',
@@ -93,8 +93,7 @@ class UsageAnalytics extends Page
                     ->options(fn (): array => User::orderBy('name')->pluck('name', 'id')->all())
                     ->searchable()
                     ->placeholder('All users'),
-            ])->columns(['default' => 1, 'sm' => 2, 'lg' => 4]),
-        ]);
+            ]);
     }
 
     /**
