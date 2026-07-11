@@ -59,8 +59,7 @@ class EventsRelationManager extends RelationManager
                     ->sortable(),
                 TextColumn::make('user.slack_handle')
                     ->label('Developer')
-                    ->formatStateUsing(fn (Event $record): string => $record->user?->slack_handle
-                        ?: ($record->user?->display_name ?: ($record->user?->name ?: ('#'.$record->user_id))))
+                    ->formatStateUsing(fn (Event $record): string => $record->user?->displayHandle() ?? '#'.$record->user_id)
                     ->searchable(),
                 TextColumn::make('provider')
                     ->badge()
