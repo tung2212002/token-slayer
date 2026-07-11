@@ -4,11 +4,13 @@ use App\Enums\AccountStatus;
 use App\Events\AccountTokenRejected;
 use App\Models\Account;
 use App\Models\AccountUsageSnapshot;
+use App\Notifications\AccountTokenRejectedNotification;
 use App\Services\AnthropicOAuthClient;
 use App\Services\UsageProber;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Notification;
 
 uses(RefreshDatabase::class);
 
@@ -244,10 +246,13 @@ test('it does not dispatch AccountTokenRejected when the account is already Need
     Event::assertNotDispatched(AccountTokenRejected::class);
 });
 
-test('a rejected refresh posts one alert to the configured security webhook end to end', function () {
-    config(['services.slack_security.webhook_url' => 'https://hooks.slack.test/security']);
+test('a rejected refresh sends one reauth slack notification end to end', function () {
+    config([
+        'services.slack_security.bot_token' => 'xoxb-test-token',
+        'services.slack_security.channel' => 'C0SECURITY',
+    ]);
+    Notification::fake();
     fakeAnthropic(['token' => Http::response(['error' => ['type' => 'invalid_grant']], 400)]);
-    Http::fake(['https://hooks.slack.test/*' => Http::response('', 200)]);
     $account = Account::factory()->connected()->create([
         'email' => 'compromised@example.com',
         'oauth_expires_at' => now()->addHours(1),
@@ -255,8 +260,8 @@ test('a rejected refresh posts one alert to the configured security webhook end 
 
     $this->prober->probe($account);
 
-    Http::assertSent(function ($request) {
-        return $request->url() === 'https://hooks.slack.test/security'
-            && str_contains(json_encode($request->data()), 'compromised@example.com');
-    });
+    Notification::assertSentOnDemand(
+        AccountTokenRejectedNotification::class,
+        fn (AccountTokenRejectedNotification $notification) => $notification->account->email === 'compromised@example.com'
+    );
 });
