@@ -243,3 +243,20 @@ test('it does not dispatch AccountTokenRejected when the account is already Need
 
     Event::assertNotDispatched(AccountTokenRejected::class);
 });
+
+test('a rejected refresh posts one alert to the configured security webhook end to end', function () {
+    config(['services.slack_security.webhook_url' => 'https://hooks.slack.test/security']);
+    fakeAnthropic(['token' => Http::response(['error' => ['type' => 'invalid_grant']], 400)]);
+    Http::fake(['https://hooks.slack.test/*' => Http::response('', 200)]);
+    $account = Account::factory()->connected()->create([
+        'email' => 'compromised@example.com',
+        'oauth_expires_at' => now()->addHours(1),
+    ]);
+
+    $this->prober->probe($account);
+
+    Http::assertSent(function ($request) {
+        return $request->url() === 'https://hooks.slack.test/security'
+            && str_contains(json_encode($request->data()), 'compromised@example.com');
+    });
+});
