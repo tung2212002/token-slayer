@@ -1,0 +1,59 @@
+<?php
+
+namespace App\Filament\Widgets;
+
+use App\Services\Analytics\TopUsersQuery;
+use App\Services\Analytics\UsageFilters;
+use Filament\Widgets\ChartWidget;
+use Filament\Widgets\Concerns\InteractsWithPageFilters;
+
+/**
+ * Horizontal bar chart of the top users by token spend in the filtered range.
+ */
+class TopUsersLeaderboard extends ChartWidget
+{
+    use InteractsWithPageFilters;
+
+    /**
+     * The heading shown above the chart.
+     *
+     * @var string|null
+     */
+    protected ?string $heading = 'Top users';
+
+    /**
+     * Maximum number of leaderboard rows to fetch.
+     *
+     * @var int
+     */
+    private const int LIMIT = 10;
+
+    /**
+     * Build the Chart.js dataset from the top-users leaderboard.
+     *
+     * @return array<string, mixed>
+     */
+    protected function getData(): array
+    {
+        $rows = app(TopUsersQuery::class)->get(UsageFilters::fromPageFilters($this->filters ?? []), self::LIMIT);
+
+        return [
+            'datasets' => [[
+                'label' => 'Tokens',
+                'data' => collect($rows)->pluck('tokens')->all(),
+                'backgroundColor' => '#d97706',
+            ]],
+            'labels' => collect($rows)->pluck('handle')->all(),
+        ];
+    }
+
+    /**
+     * The Chart.js chart type.
+     *
+     * @return string
+     */
+    protected function getType(): string
+    {
+        return 'bar';
+    }
+}
