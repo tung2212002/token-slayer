@@ -10,6 +10,7 @@ use App\Filament\Resources\Accounts\Pages\ListAccounts;
 use App\Filament\Resources\Accounts\RelationManagers\UsersRelationManager;
 use App\Models\Account;
 use App\Services\AccountConnectService;
+use App\Services\UsageProber;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
@@ -122,6 +123,8 @@ class AccountResource extends Resource
             ])
             ->recordActions([
                 static::connectAction(),
+                static::refreshNowAction(),
+                static::disconnectAction(),
                 EditAction::make(),
                 DeleteAction::make()
                     ->modalDescription('Deleting this account does not rewrite historical events — already-ingested events keep the raw account_email they were stamped with.'),
@@ -190,6 +193,68 @@ class AccountResource extends Resource
                 Notification::make()
                     ->success()
                     ->title('Account connected')
+                    ->send();
+            });
+    }
+
+    /**
+     * Build the "Refresh now" record action: runs the usage prober against the
+     * account on demand and reports the fresh 5h/7d utilization, or the recorded
+     * probe error. Delegates all work to {@see UsageProber}.
+     *
+     * @return Action
+     */
+    private static function refreshNowAction(): Action
+    {
+        return Action::make('refreshNow')
+            ->label('Refresh now')
+            ->icon(Heroicon::OutlinedArrowPath)
+            ->action(function (Account $record): void {
+                $snapshot = app(UsageProber::class)->probe($record);
+
+                if ($snapshot === null) {
+                    Notification::make()
+                        ->warning()
+                        ->title('Probe did not complete')
+                        ->body($record->refresh()->probe_error ?? 'The account is not probeable right now.')
+                        ->send();
+
+                    return;
+                }
+
+                Notification::make()
+                    ->success()
+                    ->title('Usage refreshed')
+                    ->body("5h: {$snapshot->util_5h}% · 7d: {$snapshot->util_7d}%")
+                    ->send();
+            });
+    }
+
+    /**
+     * Build the "Disconnect" record action: the compromised-token response.
+     * Wipes the stored OAuth grant via {@see AccountConnectService::disconnect()}.
+     * Its confirm modal doubles as the leak runbook, because Anthropic has no
+     * token-revocation endpoint — the real kill switch is owner-side.
+     *
+     * @return Action
+     */
+    private static function disconnectAction(): Action
+    {
+        return Action::make('disconnect')
+            ->label('Disconnect')
+            ->icon(Heroicon::OutlinedNoSymbol)
+            ->color('danger')
+            ->requiresConfirmation()
+            ->modalHeading('Disconnect Claude account')
+            ->modalDescription('Wipes the stored access and refresh tokens immediately and marks the account as needing re-auth. If the token may be compromised, this alone is NOT enough — also sign into this Claude account at claude.ai and revoke app access / sign out of all sessions, then Connect again for a fresh grant.')
+            ->modalSubmitActionLabel('Disconnect')
+            ->action(function (Account $record): void {
+                app(AccountConnectService::class)->disconnect($record);
+
+                Notification::make()
+                    ->success()
+                    ->title('Account disconnected')
+                    ->body('Stored tokens wiped. Revoke app access on claude.ai too if the token may be compromised.')
                     ->send();
             });
     }

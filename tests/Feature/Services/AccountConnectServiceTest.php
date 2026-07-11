@@ -99,3 +99,17 @@ test('complete is single-use: replaying the same state after success fails', fun
     expect(fn () => $this->service->complete($started['state'], 'the-pasted-code#'.$started['state']))
         ->toThrow(AccountConnectException::class);
 });
+
+test('disconnect wipes the stored grant and marks the account needing re-auth', function () {
+    $account = Account::factory()->connected()->create();
+
+    $this->service->disconnect($account);
+
+    $account->refresh();
+
+    expect($account->oauth_access_token)->toBeNull()
+        ->and($account->oauth_refresh_token)->toBeNull()
+        ->and($account->oauth_expires_at)->toBeNull()
+        ->and($account->status)->toBe(AccountStatus::NeedsReauth)
+        ->and($account->probe_error)->toBe('disconnected by admin');
+});

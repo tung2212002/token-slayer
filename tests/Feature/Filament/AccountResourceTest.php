@@ -143,3 +143,33 @@ it('notifies a friendly error when the connect state has expired', function () {
     $component->callMountedTableAction()
         ->assertNotified();
 });
+
+it('refreshes usage on demand and records a snapshot', function () {
+    fakeAnthropic();
+    $admin = User::factory()->create(['is_admin' => true]);
+    $account = Account::factory()->connected()->create();
+
+    Livewire::actingAs($admin)
+        ->test(ListAccounts::class)
+        ->callTableAction('refreshNow', $account)
+        ->assertNotified();
+
+    expect($account->usageSnapshots()->count())->toBe(1)
+        ->and($account->refresh()->last_probed_at)->not->toBeNull();
+});
+
+it('disconnects an account by wiping its stored tokens', function () {
+    $admin = User::factory()->create(['is_admin' => true]);
+    $account = Account::factory()->connected()->create();
+
+    Livewire::actingAs($admin)
+        ->test(ListAccounts::class)
+        ->callTableAction('disconnect', $account)
+        ->assertNotified();
+
+    $account->refresh();
+
+    expect($account->oauth_access_token)->toBeNull()
+        ->and($account->oauth_refresh_token)->toBeNull()
+        ->and($account->status)->toBe(AccountStatus::NeedsReauth);
+});

@@ -170,6 +170,28 @@ class AccountConnectService
     }
 
     /**
+     * Sever the stored OAuth grant for an account — the compromised-token
+     * response. Anthropic exposes NO token revocation endpoint (verified:
+     * `POST /v1/oauth/revoke` → 404), so there is no server-side revoke to
+     * attempt; this wipes the locally stored access/refresh tokens and expiry
+     * and marks the account `NeedsReauth`. The real kill switch remains with
+     * the account owner (claude.ai → revoke app access / sign out all
+     * sessions), surfaced to the admin in the action's confirm runbook.
+     *
+     * @param  Account  $account  the account to disconnect
+     * @return void
+     */
+    public function disconnect(Account $account): void
+    {
+        $account->oauth_access_token = null;
+        $account->oauth_refresh_token = null;
+        $account->oauth_expires_at = null;
+        $account->status = AccountStatus::NeedsReauth;
+        $account->probe_error = 'disconnected by admin';
+        $account->save();
+    }
+
+    /**
      * Generate a PKCE code verifier: base64url(random 32 bytes), no padding.
      *
      * @return string the code verifier
