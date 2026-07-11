@@ -40,7 +40,8 @@ return [
     ],
 
     'slack_security' => [
-        'webhook_url' => env('SLACK_SECURITY_WEBHOOK_URL'),
+        'bot_token' => env('SLACK_SECURITY_BOT_TOKEN'),
+        'channel' => env('SLACK_SECURITY_CHANNEL'),
     ],
 
 ];
