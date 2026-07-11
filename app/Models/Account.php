@@ -6,6 +6,7 @@ use App\Enums\AccountStatus;
 use App\Services\AccountResolver;
 use Database\Factories\AccountFactory;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -77,6 +78,23 @@ class Account extends Model
     public function latestUsageSnapshot(): HasOne
     {
         return $this->hasOne(AccountUsageSnapshot::class)->latestOfMany('created_at');
+    }
+
+    /**
+     * Scope to accounts the usage prober should attempt this cycle: not
+     * soft-disabled, not already known to have a dead refresh token
+     * (`NeedsReauth` accounts are skipped until reconnected), and holding
+     * a refresh token to exchange in the first place.
+     *
+     * @param  Builder<Account>  $query  the query being scoped
+     * @return Builder<Account> the scoped query
+     */
+    public function scopeProbeable(Builder $query): Builder
+    {
+        return $query
+            ->where('status', '!=', AccountStatus::Disabled->value)
+            ->where('status', '!=', AccountStatus::NeedsReauth->value)
+            ->whereNotNull('oauth_refresh_token');
     }
 
     protected static function newFactory(): AccountFactory

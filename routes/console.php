@@ -26,3 +26,9 @@ Schedule::command('battlefield:recap monthly')
 Schedule::command('battlefield:recap yearly')
     ->yearlyOn(1, 1, '09:00')
     ->timezone('Asia/Ho_Chi_Minh');
+
+Schedule::command('accounts:probe')
+    ->everyFiveMinutes()
+    ->withoutOverlapping();
+
+Schedule::command('accounts:prune-usage-snapshots')->daily();
