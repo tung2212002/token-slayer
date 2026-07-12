@@ -154,7 +154,7 @@ provider_account() {
 resolve_account() {
   ACC_EMAIL="" ACC_UUID="" ACC_SOURCE="" ACC_ORG_ID=""
 
-  # 0. Non-Claude providers (codex/antigravity) never carry Claude account claims.
+  # Pre-check: non-Claude providers (codex/antigravity) never carry Claude account claims.
   [ -n "${PROVIDER:-}" ] && return
 
   # 0. Account Identity Provider (proxy/switcher declares identity) -- highest signal.
