@@ -9,6 +9,7 @@ use App\Services\Accounts\AccountMembershipCache;
 use App\Support\CacheKeys;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
+use Filament\Forms\Components\Select;
 use Filament\Notifications\Notification;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Schema;
@@ -76,6 +77,7 @@ class UsersRelationManager extends RelationManager
                     ->placeholder('—'),
             ])
             ->headerActions([
+                $this->addMemberAction(),
                 $this->refreshAction(),
             ])
             ->recordActions([
@@ -96,6 +98,39 @@ class UsersRelationManager extends RelationManager
         $account = $this->getOwnerRecord();
 
         return app(AccountMembershipCache::class)->trackedLastSeen($account);
+    }
+
+    /**
+     * Build the "Add member" header action: selects any user and upserts them
+     * onto this account as a tracked member. Uses `syncWithoutDetaching` on the
+     * all-rows `users()` relationship so it promotes an existing untracked
+     * contributor (updating the pivot) or inserts a brand-new member, never
+     * hitting the unique constraint. Forgets the membership caches.
+     *
+     * @return Action
+     */
+    private function addMemberAction(): Action
+    {
+        return Action::make('addMember')
+            ->label('Add member')
+            ->icon(Heroicon::OutlinedUserPlus)
+            ->schema([
+                Select::make('user_id')
+                    ->label('User')
+                    ->options(fn (): array => User::query()->orderBy('name')->pluck('email', 'id')->all())
+                    ->searchable()
+                    ->required(),
+            ])
+            ->action(function (array $data): void {
+                /** @var Account $account */
+                $account = $this->getOwnerRecord();
+                $account->users()->syncWithoutDetaching([
+                    $data['user_id'] => ['status' => MembershipStatus::Tracked->value],
+                ]);
+                CacheKeys::forgetAccountMembership($account->id);
+
+                Notification::make()->success()->title('Member added')->send();
+            });
     }
 
     /**
