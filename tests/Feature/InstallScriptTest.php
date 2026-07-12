@@ -243,11 +243,11 @@ it('merges account_org_id into the outgoing event body when resolved', function 
     expect($mergeBlock)->toContain('account_org_id');
 });
 
-it('bumps the client version to 3 for the org-id beacon rollout', function () {
+it('bumps the client version to 4 for the multi-account attribution rollout', function () {
     $script = $this->get(route('install-script'))->content();
 
-    expect(config('token_slayer.client_version'))->toBe('3')
-        ->and($script)->toContain("CLIENT_VERSION='3'");
+    expect(config('token_slayer.client_version'))->toBe('4')
+        ->and($script)->toContain("CLIENT_VERSION='4'");
 });
 
 it('tips users toward custom.sh to customize what their fighter shows, at the end of a successful install', function () {
