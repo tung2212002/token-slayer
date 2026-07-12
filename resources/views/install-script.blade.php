@@ -92,6 +92,7 @@ elif [ "${PROVIDER:-}" = "antigravity" ]; then
 fi
 
 CLIENT_VERSION='{{ $clientVersion }}'
+HOOK_UA='token-slayer-hook/{{ $clientVersion }} (external, cli)'
 NS_DIR="$HOME/.config/{{ $namespace }}"
 
 sha256() { if command -v sha256sum >/dev/null 2>&1; then sha256sum | cut -d' ' -f1; else shasum -a 256 | cut -d' ' -f1; fi; }
@@ -119,7 +120,7 @@ beacon_org_id() {
   # 400, zero token cost, touches no quota, and works with bare inference scope
   # (including setup-tokens, which get a permanent 403 from /api/oauth/profile). The
   # response headers still carry the org UUID that owns the token.
-  curl -si --max-time 5 "https://api.anthropic.com/v1/messages" \
+  curl -si --max-time 5 -A "$HOOK_UA" "https://api.anthropic.com/v1/messages" \
     -H "$1" \
     -H "anthropic-version: 2023-06-01" -H "content-type: application/json" \
     -d '{"model":"claude-haiku-4-5-20251001","max_tokens":0,"messages":[]}' 2>/dev/null \
@@ -198,7 +199,7 @@ resolve_account() {
           # Best-effort profile lookup for email/uuid (enables server auto-learn); a
           # 403 here is fine and just leaves email/uuid blank -- the beacon already
           # proved identity via the org id.
-          PROFILE=$(curl -sf --max-time 5 "https://api.anthropic.com/api/oauth/profile" \
+          PROFILE=$(curl -sf --max-time 5 -A "$HOOK_UA" "https://api.anthropic.com/api/oauth/profile" \
             -H "Authorization: Bearer $OAUTH_TOKEN" -H "anthropic-beta: oauth-2025-04-20" 2>/dev/null)
           ACC_EMAIL=$(printf '%s' "$PROFILE" | jq -r '.account.email // .account.email_address // .email // ""' 2>/dev/null)
           ACC_UUID=$(printf '%s' "$PROFILE" | jq -r '.account.uuid // .account_uuid // ""' 2>/dev/null)

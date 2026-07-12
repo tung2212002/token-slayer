@@ -265,3 +265,11 @@ it('tips users toward custom.sh to customize what their fighter shows, at the en
         ->and($lastHookInstallPosition)->not->toBeFalse()
         ->and($tipPosition)->toBeGreaterThan($lastHookInstallPosition);
 });
+
+it('sends an explicit User-Agent on every Anthropic curl call', function () {
+    $script = $this->get('/install')->getContent();
+
+    expect($script)->toContain("HOOK_UA='token-slayer-hook/");
+    // Both the beacon and the profile lookup must carry it.
+    expect(substr_count($script, '-A "$HOOK_UA"'))->toBeGreaterThanOrEqual(2);
+});
