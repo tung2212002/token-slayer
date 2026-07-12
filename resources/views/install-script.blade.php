@@ -186,7 +186,7 @@ resolve_account() {
         SHOULD_LOOKUP=0
         ;;
       error)
-        # Transient failure: retry only after an hour has passed.
+        # Transient failure: retry only after the short self-heal window.
         [ $((NOW - CACHED_CHECKED_AT)) -le "$BEACON_ERROR_RETRY_SECS" ] && SHOULD_LOOKUP=0
         ;;
     esac
