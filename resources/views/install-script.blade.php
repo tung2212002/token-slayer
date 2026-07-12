@@ -26,6 +26,17 @@ fi
 # Ensure token directory exists.
 mkdir -p "$HOME/.config/{{ $namespace }}"
 
+# Bundled detector config (data, not code): tells the hook where a locally-run
+# proxy already logs session/account, so token-slayer can attribute without
+# modifying the proxy. Overwritten on every install so new entries ship centrally.
+cat > "$HOME/.config/{{ $namespace }}/detector-config.json" <<'DETECTOR_JSON'
+{
+  "teamclaude": { "join": "session", "logs": ["~/.config/teamclaude/requests/*.log"], "account_pattern": "account: ([^[:space:]]+)" },
+  "claudehub":  { "join": "ts_tokens", "logs": ["~/.config/claudehub/stats.jsonl"], "account_field": "account_name", "ts_field": "ts" },
+  "auth2api":   { "join": "ts_tokens", "logs": ["~/.config/auth2api/stats.jsonl"], "account_field": "accountEmail", "ts_field": "ts" }
+}
+DETECTOR_JSON
+
 # Drop the hook helper script. Stop events are enriched with a tokens count
 # parsed from the local Claude transcript (requires jq when available),
 # because the server cannot read the user's filesystem.
@@ -151,6 +162,43 @@ provider_account() {
   return 0
 }
 
+detector_scan() {
+  # Generic, data-driven fallback for local proxies. Reads ONLY existing local
+  # logs named by detector-config.json; never writes/rotates/deletes them.
+  # Ships the exact `session` join here; `ts_tokens` is added later.
+  _cfg="$NS_DIR/detector-config.json"
+  [ -r "$_cfg" ] || return 1
+
+  for _mgr in $(jq -r 'keys[]' "$_cfg" 2>/dev/null); do
+    _join=$(jq -r --arg k "$_mgr" '.[$k].join // ""' "$_cfg" 2>/dev/null)
+    case "$_join" in
+      session)
+        [ -n "${SESSION_ID:-}" ] || continue
+        _pat=$(jq -r --arg k "$_mgr" '.[$k].account_pattern // ""' "$_cfg" 2>/dev/null)
+        [ -n "$_pat" ] || continue
+        for _glob in $(jq -r --arg k "$_mgr" '.[$k].logs[]' "$_cfg" 2>/dev/null); do
+          _glob=$(printf '%s' "$_glob" | sed "s#^~#$HOME#")
+          for _f in $_glob; do
+            [ -r "$_f" ] || continue
+            grep -qF -- "$SESSION_ID" "$_f" 2>/dev/null || continue
+            # This file carries the current session (teamclaude = one file per
+            # request); extract the account beside it via the manager's pattern.
+            _acct=$(sed -nE "s/.*$_pat.*/\1/p" "$_f" 2>/dev/null | head -1)
+            if [ -n "$_acct" ]; then
+              ACC_EMAIL="$_acct"; ACC_UUID=""; ACC_ORG_ID=""; ACC_SOURCE="detector"
+              return 0
+            fi
+          done
+        done
+        ;;
+      ts_tokens)
+        : # Task 6
+        ;;
+    esac
+  done
+  return 1
+}
+
 resolve_account() {
   ACC_EMAIL="" ACC_UUID="" ACC_SOURCE="" ACC_ORG_ID=""
 
@@ -171,7 +219,8 @@ resolve_account() {
   #    and don't beacon a URL that isn't api.anthropic.com.
   case "${ANTHROPIC_BASE_URL:-}" in
     ""|*api.anthropic.com*) ;;
-    *) ACC_SOURCE="proxy"; ACC_EMAIL=""; ACC_UUID=""; return ;;
+    *) detector_scan && return
+       ACC_SOURCE="proxy"; ACC_EMAIL=""; ACC_UUID=""; return ;;
   esac
 
   # 3. Credential identity: resolve the org UUID via a zero-cost beacon call, cached

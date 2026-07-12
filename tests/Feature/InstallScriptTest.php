@@ -307,3 +307,18 @@ it('consults an account identity provider before the beacon, by-session then act
     expect(strpos($script, 'SESSION_ID=$(printf'))
         ->toBeLessThan(strpos($script, "\n  resolve_account\n"));
 });
+
+it('bundles a detector-config and scans a proxy log by session id before giving up', function () {
+    $script = $this->get('/install')->getContent();
+
+    // Bundled config is written by the installer.
+    expect($script)->toContain('detector-config.json');
+    expect($script)->toContain('"teamclaude"');
+    expect($script)->toContain('"join": "session"');
+
+    // Generic scanner exists and runs inside the proxy branch, before NULL.
+    expect($script)->toContain('detector_scan()');
+    expect($script)->toContain('ACC_SOURCE="detector"');
+    expect(strpos($script, 'detector_scan && return'))
+        ->toBeLessThan(strpos($script, 'ACC_SOURCE="proxy"'));
+});
