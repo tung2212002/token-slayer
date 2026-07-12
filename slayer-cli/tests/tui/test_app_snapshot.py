@@ -46,8 +46,9 @@ def test_accounts_page_initial_render(tmp_path, monkeypatch, snap_compare):
     app = SlayerApp(paths)
 
     async def run_before(pilot):
-        # Let the worker threads finish fetching (stubbed, so this is fast)
-        # and their call_from_thread redraw land before the screenshot.
-        await pilot.pause(0.3)
+        # Wait for the usage-fetch worker threads to complete AND their
+        # call_from_thread redraws to land — deterministic, not a fixed sleep.
+        await pilot.app.workers.wait_for_complete()
+        await pilot.pause()
 
     assert snap_compare(app, run_before=run_before, terminal_size=(100, 30))
