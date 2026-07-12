@@ -288,3 +288,22 @@ it('forces bash for Claude Code hooks so Windows uses Git Bash deterministically
     // The Python merge appends the command dict with an explicit shell.
     expect($script)->toContain('"type": "command", "command": cmd, "shell": "bash"');
 });
+
+it('consults an account identity provider before the beacon, by-session then active', function () {
+    $script = $this->get('/install')->getContent();
+
+    expect($script)->toContain('provider_account()');
+    expect($script)->toContain('CLAUDE_ACCOUNT_PROVIDER');
+    expect($script)->toContain('account-provider/sessions/$SESSION_ID.json');
+    expect($script)->toContain('account-provider/active.json');
+    expect($script)->toContain('ACC_SOURCE="provider"');
+
+    // provider runs before the credential beacon
+    expect(strpos($script, 'provider_account && return'))
+        ->toBeLessThan(strpos($script, 'OAUTH_TOKEN=$(current_access_token)'));
+
+    // session id is extracted from the payload before resolve_account runs
+    expect($script)->toContain('.session_id // .sessionId // ""');
+    expect(strpos($script, 'SESSION_ID=$(printf'))
+        ->toBeLessThan(strpos($script, "\n  resolve_account\n"));
+});

@@ -127,11 +127,38 @@ beacon_org_id() {
     | grep -i '^anthropic-organization-id:' | awk '{print $2}' | tr -d '\r'
 }
 
+provider_account() {
+  # Account Identity Provider intake. Whichever layer holds the real credential
+  # (a proxy or switcher) may declare identity via a portable transport;
+  # token-slayer ships no code into that layer -- it only reads. Env var + file
+  # only (socket / URL / executable transports are out of scope for now).
+  _pv=""
+  if [ -n "${CLAUDE_ACCOUNT_PROVIDER:-}" ] && [ -r "${CLAUDE_ACCOUNT_PROVIDER}" ]; then
+    _pv="${CLAUDE_ACCOUNT_PROVIDER}"
+  elif [ -n "${SESSION_ID:-}" ] && [ -r "$NS_DIR/account-provider/sessions/$SESSION_ID.json" ]; then
+    _pv="$NS_DIR/account-provider/sessions/$SESSION_ID.json"
+  elif [ -r "$NS_DIR/account-provider/active.json" ]; then
+    _pv="$NS_DIR/account-provider/active.json"
+  fi
+  [ -n "$_pv" ] || return 1
+
+  _org=$(jq -r '.org_uuid // ""' "$_pv" 2>/dev/null)
+  [ -n "$_org" ] || return 1
+  ACC_ORG_ID="$_org"
+  ACC_EMAIL=$(jq -r '.email // ""' "$_pv" 2>/dev/null)
+  ACC_UUID=$(jq -r '.uuid // ""' "$_pv" 2>/dev/null)
+  ACC_SOURCE="provider"
+  return 0
+}
+
 resolve_account() {
   ACC_EMAIL="" ACC_UUID="" ACC_SOURCE="" ACC_ORG_ID=""
 
   # 0. Non-Claude providers (codex/antigravity) never carry Claude account claims.
   [ -n "${PROVIDER:-}" ] && return
+
+  # 0. Account Identity Provider (proxy/switcher declares identity) -- highest signal.
+  provider_account && return
 
   # 1. Manual override wins unconditionally.
   if [ -r "$NS_DIR/account.json" ]; then
@@ -232,6 +259,7 @@ resolve_account() {
 }
 
 if command -v jq >/dev/null 2>&1; then
+  SESSION_ID=$(printf '%s' "$BODY" | jq -r '.session_id // .sessionId // ""' 2>/dev/null)
   resolve_account
   BODY=$(printf '%s' "$BODY" | jq -c --arg e "$ACC_EMAIL" --arg u "$ACC_UUID" \
     --arg s "$ACC_SOURCE" --arg v "$CLIENT_VERSION" --arg o "$ACC_ORG_ID" \
