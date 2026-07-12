@@ -334,3 +334,13 @@ it('attributes a ts_tokens window only when exactly one account served it', func
     expect(strpos($script, 'DETECTOR_WINDOW_SECS'))
         ->toBeGreaterThan(strpos($script, 'detector_scan()'));
 });
+
+it('reserves the exclude-check hook point between attribution and the POST', function () {
+    $script = $this->get('/install')->getContent();
+
+    expect($script)->toContain('exclude-check hook point (Phase 3)');
+
+    $marker = strpos($script, 'exclude-check hook point (Phase 3)');
+    expect($marker)->toBeGreaterThan(strpos($script, 'resolve_account'));
+    expect($marker)->toBeLessThan(strpos($script, 'curl -s --max-time 3 -X POST'));
+});

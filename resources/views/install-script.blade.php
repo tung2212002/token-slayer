@@ -343,6 +343,11 @@ fi
 CUSTOM_SH="$HOME/.config/{{ $namespace }}/custom.sh"
 [ -r "$CUSTOM_SH" ] && . "$CUSTOM_SH"
 
+# --- exclude-check hook point (Phase 3) ---
+# Reserved: a future dev-owned exclude-accounts.json will let a developer drop
+# their own private accounts here (exit 0 before POST) so those events never
+# leave the machine. Not active yet -- default is track everything.
+
 curl -s --max-time 3 -X POST "$URL" \
   -H "Authorization: Bearer $(cat "$TOKEN_FILE")" \
   -H 'Content-Type: application/json' \
