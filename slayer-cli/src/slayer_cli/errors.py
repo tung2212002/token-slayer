@@ -1,0 +1,12 @@
+"""Typed domain errors."""
+class SlayerError(Exception):
+    """Base class for all slayer-cli errors."""
+
+class AccountNotFound(SlayerError):
+    """Requested account slot does not exist."""
+
+class CredentialError(SlayerError):
+    """Reading/writing the active credential failed."""
+
+class UsageFetchError(SlayerError):
+    """Fetching quota from Anthropic failed."""
