@@ -73,3 +73,17 @@ def test_patch_oauth_account(tmp_path, monkeypatch):
     d = json.loads(p.claude_json.read_text())
     assert d["other"] == 1
     assert d["oauthAccount"] == {"emailAddress": "a@b.com", "accountUuid": "u1", "organizationUuid": "org1"}
+
+def test_write_full_keeps_real_refresh_token(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path)); monkeypatch.delenv("CLAUDE_CONFIG_DIR", raising=False)
+    monkeypatch.setattr(sys, "platform", "linux")
+    p = Paths("token_slayer")
+    p.claude_credentials_file.parent.mkdir(parents=True)
+    p.claude_credentials_file.write_text(json.dumps({"mcpOAuth": {"keep": 1}}))
+    credstore.write_active_full(p, "sk-ant-oat01-TESTTOKEN", "ort01-REFRESH", 1_800_000_000_000)
+    data = json.loads(p.claude_credentials_file.read_text())["claudeAiOauth"]
+    assert data["accessToken"] == "sk-ant-oat01-TESTTOKEN"
+    assert data["refreshToken"] == "ort01-REFRESH"      # real, NOT null
+    assert data["expiresAt"] == 1_800_000_000_000
+    assert json.loads(p.claude_credentials_file.read_text())["mcpOAuth"] == {"keep": 1}
+    assert p.claude_credentials_file.stat().st_mode & 0o777 == 0o600

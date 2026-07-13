@@ -130,6 +130,43 @@ def restore_backup(creds_file: Path) -> bool:
     return True
 
 
+def write_full(creds_file: Path, access_token: str, refresh_token: str, expires_at: int) -> None:
+    """Write a FULL grant (real refresh token + expiry) so Claude Code self-refreshes.
+
+    Unlike :func:`write` (which nulls the refresh token, ccm-style), this
+    persists the real ``refreshToken`` and the real ``expiresAt`` for a
+    provisioned grant, preserving other credential keys. Atomic, 0600.
+
+    :param creds_file: Path to Claude Code's `.credentials.json`.
+    :param access_token: Raw `sk-ant-oat01-…` access token.
+    :param refresh_token: Real `ort01-…` refresh token for Claude Code self-refresh.
+    :param expires_at: Token expiry time in milliseconds (Unix epoch * 1000).
+    :return: None
+    """
+    data: dict = {}
+    if creds_file.is_file():
+        try:
+            data = json.loads(creds_file.read_text())
+        except ValueError:
+            data = {}
+    data.setdefault("claudeAiOauth", {})
+    data["claudeAiOauth"].update(
+        {
+            "accessToken": access_token,
+            "refreshToken": refresh_token,
+            "expiresAt": expires_at,
+            "scopes": SCOPES,
+        }
+    )
+    try:
+        creds_file.parent.mkdir(parents=True, exist_ok=True)
+        os.chmod(creds_file.parent, 0o700)
+        _backup_if_absent(creds_file)
+        _atomic_write_bytes(creds_file, json.dumps(data, indent=2).encode())
+    except OSError as exc:
+        raise CredentialError(f"failed to write credential file: {creds_file}") from exc
+
+
 def read(creds_file: Path) -> str | None:
     """Return the active access token from `creds_file`, or None if absent/unreadable.
 
