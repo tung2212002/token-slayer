@@ -6,7 +6,7 @@ import sys
 from slayer_cli.credstore import claude_json
 from slayer_cli.platform.paths import Paths
 
-__all__ = ["claude_json", "read_active_token", "write_active_token", "write_active_full"]
+__all__ = ["claude_json", "read_active_token", "read_active_full", "write_active_token", "write_active_full"]
 
 
 def read_active_token(paths: Paths) -> str | None:
@@ -22,6 +22,21 @@ def read_active_token(paths: Paths) -> str | None:
     from slayer_cli.credstore import file_store
 
     return file_store.read(paths.claude_credentials_file)
+
+
+def read_active_full(paths: Paths) -> dict | None:
+    """Return Claude Code's active `.claudeAiOauth` block, or None if unset.
+
+    :param paths: Resolved OS paths (honors `CLAUDE_CONFIG_DIR`).
+    :return: The active oauth block dict, or None.
+    """
+    if sys.platform == "darwin":
+        from slayer_cli.credstore import keychain_store
+
+        return keychain_store.read_full()
+    from slayer_cli.credstore import file_store
+
+    return file_store.read_full(paths.claude_credentials_file)
 
 
 def write_active_token(paths: Paths, token: str) -> None:

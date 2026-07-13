@@ -179,3 +179,23 @@ def read(creds_file: Path) -> str | None:
         return json.loads(creds_file.read_text()).get("claudeAiOauth", {}).get("accessToken")
     except ValueError:
         return None
+
+
+def read_full(creds_file: Path) -> dict | None:
+    """Return the whole `.claudeAiOauth` block (accessToken, refreshToken,
+    expiresAt, scopes, …) as a dict, or None if the file is absent or unparseable.
+
+    Used to capture the CURRENT live grant (which Claude Code may have rotated)
+    before switching away, so the outgoing slot keeps a valid refresh token.
+
+    :param creds_file: Path to Claude Code's `.credentials.json`.
+    :return: The `.claudeAiOauth` block dict, or None.
+    """
+    if not creds_file.is_file():
+        return None
+    try:
+        data = json.loads(creds_file.read_text())
+    except ValueError:
+        return None
+    block = data.get("claudeAiOauth")
+    return block if isinstance(block, dict) else None

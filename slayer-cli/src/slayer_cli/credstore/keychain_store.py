@@ -118,3 +118,23 @@ def read() -> str | None:
         return json.loads(raw).get("claudeAiOauth", {}).get("accessToken")
     except ValueError:
         return None
+
+
+def read_full() -> dict | None:
+    """Return the whole `.claudeAiOauth` block (accessToken, refreshToken,
+    expiresAt, scopes, …) as a dict, or None if the Keychain entry is absent or unparseable.
+
+    Used to capture the CURRENT live grant (which Claude Code may have rotated)
+    before switching away, so the outgoing slot keeps a valid refresh token.
+
+    :return: The `.claudeAiOauth` block dict, or None.
+    """
+    raw = _read_raw()
+    if raw is None:
+        return None
+    try:
+        data = json.loads(raw)
+    except ValueError:
+        return None
+    block = data.get("claudeAiOauth")
+    return block if isinstance(block, dict) else None
