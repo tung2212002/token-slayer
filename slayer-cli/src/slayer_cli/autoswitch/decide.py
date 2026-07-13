@@ -1,4 +1,4 @@
-"""The pure swap decision the wrapper drives. Ported from cux's `step`.
+"""The pure swap decision the wrapper drives.
 
 Given the pending signal (from the file bus), the current config, and the
 usage cache, decide what the wrapper should do next: switch accounts, retry
@@ -59,7 +59,7 @@ def decide_action(*, pending_signal: str | None, signal_payload: dict,
                    cache: dict[str, AccountUsage]) -> Action:
     """Decide the wrapper's next move for the given pending signal.
 
-    Priority mirrors cux's `step`: rate-limit and turn-failed are per-turn
+    Priority: rate-limit and turn-failed are per-turn
     reactions; switch-requested is explicit user intent; threshold switching
     only fires on STOPPED (turn boundary) and never in manual mode (manual
     mode only ever suggests via "none").

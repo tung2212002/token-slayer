@@ -3,10 +3,10 @@ from slayer_cli.autoswitch.relaunch import relaunch_argv, session_id_from, fibon
 
 def test_relaunch_strips_and_appends():
     out = relaunch_argv(["--model", "opus", "--resume", "old", "-p"], "sid",
-                        auto_resume=True, auto_message="Go continue.")
+                        auto_resume=True, auto_message="continue")
     assert "--resume" in out and out[out.index("--resume") + 1] == "sid"
     assert "old" not in out and "-p" not in out
-    assert out[-1] == "Go continue."
+    assert out[-1] == "continue"
     assert "--model" in out and out[out.index("--model") + 1] == "opus"   # non-session flag kept
 
 

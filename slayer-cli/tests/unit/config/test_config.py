@@ -8,7 +8,7 @@ def test_defaults_manual(tmp_path, monkeypatch):
     cfg = store.load(Paths("token_slayer"))          # missing file → defaults
     assert cfg.strategy.kind == "manual"
     assert cfg.thresholds.five_hour == 100 and cfg.thresholds.seven_day == 100
-    assert cfg.auto_switch_on_threshold is True and cfg.auto_message == "Go continue."
+    assert cfg.auto_switch_on_threshold is True and cfg.auto_message == "continue"
 
 
 def test_set_and_round_trip(tmp_path, monkeypatch):

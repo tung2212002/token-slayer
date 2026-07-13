@@ -31,6 +31,6 @@ class Config(BaseModel):
     auto_switch_on_threshold: bool = True
     auto_switch_on_rate_limit: bool = True
     auto_resume: bool = True
-    auto_message: str = "Go continue."
+    auto_message: str = "continue"
     wait_for_reset: bool = True
     retry_on_api_error: bool = True

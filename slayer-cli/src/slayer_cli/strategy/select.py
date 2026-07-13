@@ -1,5 +1,5 @@
 """Decide which account to switch to. Pure: operates on Candidates + a usage
-cache, so it is trivially unit-testable. Ported from cux's strategy.go."""
+cache, so it is trivially unit-testable."""
 from __future__ import annotations
 from dataclasses import dataclass
 from slayer_cli.models.usage_windows import AccountUsage, Thresholds, Window, is_over_threshold
