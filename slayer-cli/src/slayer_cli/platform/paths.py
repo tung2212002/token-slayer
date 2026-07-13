@@ -71,6 +71,14 @@ class Paths:
         return f.with_name(f.name + ".slayer-bak")
 
     @property
+    def settings_file(self) -> Path:
+        """Claude Code settings file path (~/.claude/settings.json or CLAUDE_CONFIG_DIR).
+
+        Contains hook definitions, model preference, and other Claude Code state.
+        """
+        return self._claude_config_dir / "settings.json"
+
+    @property
     def claude_json(self) -> Path:
         cc = os.environ.get("CLAUDE_CONFIG_DIR")
         return (Path(cc) / ".claude.json") if cc else self.home / ".claude.json"

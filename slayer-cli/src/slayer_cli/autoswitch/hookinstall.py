@@ -53,7 +53,7 @@ def _load(paths: Paths) -> dict[str, Any]:
     :param paths: Resolved filesystem paths for this namespace.
     :return: Parsed settings dict.
     """
-    settings_file = paths._claude_config_dir / "settings.json"
+    settings_file = paths.settings_file
     if not settings_file.is_file():
         return {}
     try:
@@ -70,9 +70,8 @@ def _save(paths: Paths, data: dict[str, Any]) -> None:
     :param data: Full settings dict to persist.
     :return: None
     """
-    config_dir = paths._claude_config_dir
-    config_dir.mkdir(parents=True, exist_ok=True)
-    settings_file = config_dir / "settings.json"
+    settings_file = paths.settings_file
+    settings_file.parent.mkdir(parents=True, exist_ok=True)
     tmp = settings_file.with_suffix(".tmp")
     fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o644)
     with os.fdopen(fd, "w") as handle:
