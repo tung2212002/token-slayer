@@ -43,6 +43,19 @@ class Paths:
         return self._claude_config_dir / ".credentials.json"
 
     @property
+    def claude_credentials_backup(self) -> Path:
+        """No-clobber backup of the pristine pre-slayer credential file.
+
+        Same directory as `claude_credentials_file`, with `.slayer-bak`
+        appended to the filename (honors `CLAUDE_CONFIG_DIR` transitively,
+        since it derives from `claude_credentials_file`).
+
+        :return: `claude_credentials_file` with `.slayer-bak` appended to its name.
+        """
+        f = self.claude_credentials_file
+        return f.with_name(f.name + ".slayer-bak")
+
+    @property
     def claude_json(self) -> Path:
         cc = os.environ.get("CLAUDE_CONFIG_DIR")
         return (Path(cc) / ".claude.json") if cc else self.home / ".claude.json"
