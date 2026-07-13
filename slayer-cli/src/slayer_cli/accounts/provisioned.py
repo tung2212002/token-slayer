@@ -39,7 +39,7 @@ def pull_and_setup(paths: Paths, hook_token: str, *, client: httpx.Client | None
     `credstore.write_active_full` (real refresh token, so Claude Code
     self-refreshes) and marked active in the store. Switching away later
     will re-write a null refresh token for provisioned accounts (v1
-    limitation — see `.ai/domain/accounts.md`).
+    limitation — see `.ai/domain/switching.md`).
 
     :param paths: Resolved OS paths for the active namespace.
     :param hook_token: The user's hook token (Bearer auth to the server).

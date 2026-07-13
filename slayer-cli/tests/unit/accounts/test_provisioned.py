@@ -33,3 +33,4 @@ def test_pull_writes_full_credential_and_upserts_slot(tmp_path, monkeypatch):
     # active credential written with the REAL refresh token
     creds = json.loads(p.claude_credentials_file.read_text())["claudeAiOauth"]
     assert creds["refreshToken"] == "ort01-REFRESH" and creds["accessToken"] == "sk-ant-oat01-TESTTOKEN"
+    assert creds["expiresAt"] == 1_800_000_000_000
