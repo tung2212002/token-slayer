@@ -34,6 +34,11 @@ class Paths:
     def active_file(self) -> Path: return self.provider_dir / constants.ACTIVE_FILE
 
     @property
+    def config_file(self) -> Path:
+        """User behaviour config file path."""
+        return self.config_dir / constants.CONFIG_FILE
+
+    @property
     def _claude_config_dir(self) -> Path:
         cc = os.environ.get("CLAUDE_CONFIG_DIR")
         return Path(cc) if cc else self.home / ".claude"

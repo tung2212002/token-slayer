@@ -9,7 +9,7 @@ from dataclasses import dataclass
 import click
 
 from slayer_cli.accounts.store import AccountStore
-from slayer_cli.cli.commands import add, alias, current, force_switch, install_hooks, remove, setup, status, switch, tui, uninstall, update
+from slayer_cli.cli.commands import add, alias, config, current, force_switch, install_hooks, remove, setup, status, switch, tui, uninstall, update
 from slayer_cli.cli.commands import list as list_cmd
 from slayer_cli.platform.paths import Paths
 
@@ -45,6 +45,7 @@ def main(ctx: click.Context) -> None:
 
 main.add_command(add.command, name="add")
 main.add_command(alias.command, name="alias")
+main.add_command(config.command, name="config")
 main.add_command(list_cmd.command, name="list")
 main.add_command(list_cmd.command, name="ls")
 main.add_command(remove.command, name="remove")
