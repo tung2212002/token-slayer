@@ -28,14 +28,24 @@ def _env(monkeypatch, tmp_path, pid):
 
 
 def test_session_start_writes_signal(tmp_path, monkeypatch):
-    """session_start writes SESSION_STARTED with sessionId + cwd."""
+    """session_start writes SESSION_STARTED with sessionId + cwd + transcriptPath."""
     pid = 1111
     _env(monkeypatch, tmp_path, pid)
     hooks.session_start(
-        io.StringIO(json.dumps({"session_id": "s1", "cwd": "/work/dir"})), io.StringIO()
+        io.StringIO(json.dumps({"session_id": "s1", "cwd": "/work/dir", "transcript_path": "/t/s1.jsonl"})),
+        io.StringIO(),
     )
     sig = signals.read(Paths("token_slayer"), pid, signals.SESSION_STARTED)
-    assert sig == {"sessionId": "s1", "cwd": "/work/dir"}
+    assert sig == {"sessionId": "s1", "cwd": "/work/dir", "transcriptPath": "/t/s1.jsonl"}
+
+
+def test_stop_captures_transcript_path(tmp_path, monkeypatch):
+    """stop carries transcriptPath so the wrapper can recover a missing sessionId."""
+    pid = 4243
+    _env(monkeypatch, tmp_path, pid)
+    hooks.stop(io.StringIO(json.dumps({"session_id": "s1", "transcript_path": "/t/s1.jsonl"})))
+    sig = signals.read(Paths("token_slayer"), pid, signals.STOPPED)
+    assert sig["transcriptPath"] == "/t/s1.jsonl"
 
 
 def test_stop_writes_signal(tmp_path, monkeypatch):

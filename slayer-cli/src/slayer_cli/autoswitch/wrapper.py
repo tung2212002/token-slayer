@@ -11,13 +11,12 @@ import sys
 import time
 from typing import Callable
 
+from slayer_cli import credstore
 from slayer_cli.accounts.switch import switch_to
 from slayer_cli.autoswitch import registry, relaunch, signals
 from slayer_cli.autoswitch.decide import Action, decide_action
 from slayer_cli.config import store as config_store
 from slayer_cli.config.model import Config
-from slayer_cli.credstore import refresh as credstore_refresh
-from slayer_cli.errors import SlayerError
 from slayer_cli.models.usage_windows import is_over_threshold, now_seconds
 from slayer_cli.strategy.recover import recover_soonest
 from slayer_cli.strategy.select import Candidate
@@ -61,14 +60,21 @@ def _load_candidates(services) -> tuple[list[Candidate], Candidate | None, dict]
 
 
 def _refresh_active_usage(services, cfg: Config) -> tuple[bool, list[Candidate], "Candidate | None", dict]:
-    """Refresh the ACTIVE account's usage (self-refreshing its token first if
-    expired), persist the result to the usage cache, then build candidates
-    for every managed slot so strategy sees the freshly-polled cache.
+    """Poll the ACTIVE account's usage, persist it to the cache keyed by the
+    slot's identity, then build candidates for every managed slot so strategy
+    sees the freshly-polled cache.
 
-    A refresh failure never crashes the poll loop — it falls back to the
-    slot's existing (possibly stale) token for this cycle's usage fetch, the
-    same "one bad account never poisons the caller" tolerance `fetch_usage`
-    itself uses.
+    The token comes from the LIVE credential Claude Code maintains
+    (`credstore.read_active_full`), never the slot's stored copy: Claude
+    self-rotates the access token (~8h) and consumes its single-use refresh
+    token, so the slot copy drifts stale within a long session and would make
+    usage polling — and therefore proactive threshold switching — silently
+    stop after the first rotation. We never refresh the live grant here:
+    Claude owns it, and refreshing would clobber its single-use refresh token.
+    The slot token is used only as a fallback when no live grant exists (e.g.
+    the user is logged out). A failed/empty fetch never crashes the loop —
+    `fetch_usage` returns an empty snapshot, which reads as "not over
+    threshold" (no switch), matching "one bad poll never strands the caller".
 
     :param services: the CLI Services bundle (paths + store).
     :param cfg: user behaviour configuration.
@@ -83,21 +89,8 @@ def _refresh_active_usage(services, cfg: Config) -> tuple[bool, list[Candidate],
         return False, candidates, current, cache
 
     account = store.get(active_name)
-    token = account.token
-    block = {"accessToken": account.token, "refreshToken": account.refresh_token, "expiresAt": account.expires_at}
-    if account.refresh_token and credstore_refresh.is_expired(block):
-        try:
-            refreshed = credstore_refresh.refresh_grant(block)
-        except SlayerError:
-            refreshed = None
-        if refreshed is not None:
-            token = refreshed["accessToken"]
-            account = account.model_copy(update={
-                "token": refreshed["accessToken"],
-                "refresh_token": refreshed.get("refreshToken") or account.refresh_token,
-                "expires_at": refreshed.get("expiresAt") or account.expires_at,
-            })
-            store.add(account)
+    live = credstore.read_active_full(paths)
+    token = (live or {}).get("accessToken") or account.token
 
     usage = usage_oauth.fetch_usage(token)
     cache[usage_cache.cache_key(account)] = usage
@@ -106,21 +99,33 @@ def _refresh_active_usage(services, cfg: Config) -> tuple[bool, list[Candidate],
     return active_over_threshold, candidates, current, cache
 
 
-def _poll_once(services, cfg: Config, wrapper_pid: int,
-                session_id: str | None) -> tuple["Action | None", str | None]:
+def _dir_of(transcript_path: str | None) -> str | None:
+    """Return the directory holding a transcript file, or None when absent.
+
+    :param transcript_path: An absolute `*.jsonl` transcript path, or None.
+    :return: The containing directory, or None.
+    """
+    return os.path.dirname(transcript_path) if transcript_path else None
+
+
+def _poll_once(services, cfg: Config, wrapper_pid: int, session_id: str | None,
+                transcript_dir: str | None) -> tuple["Action | None", str | None, str | None]:
     """Check the signal bus once.
 
-    Tracks `SESSION_STARTED`'s session id unconditionally (it never itself
-    yields an Action), then looks for a decision signal in `decide_action`'s
-    priority order; the first one present is consumed and decided. Only a
-    `STOPPED` signal refreshes the active account's usage first — the other
-    decision signals act immediately on the existing cache.
+    Tracks `SESSION_STARTED`'s session id and transcript directory
+    unconditionally (it never itself yields an Action), then looks for a
+    decision signal in `decide_action`'s priority order; the first one present
+    is consumed and decided. Only a `STOPPED` signal refreshes the active
+    account's usage first — the other decision signals act immediately on the
+    existing cache. The transcript directory is threaded so a relaunch can
+    recover a missing session id from the newest transcript (see `run`).
 
     :param services: the CLI Services bundle (paths + store).
     :param cfg: user behaviour configuration.
     :param wrapper_pid: this wrapper's own PID (the signal-bus namespace).
     :param session_id: the currently-tracked session id, or None.
-    :return: (a non-`none` Action, or None; the possibly-updated session id).
+    :param transcript_dir: the currently-tracked transcript directory, or None.
+    :return: (a non-`none` Action, or None; the session id; the transcript dir).
     """
     paths = services.paths
 
@@ -128,6 +133,7 @@ def _poll_once(services, cfg: Config, wrapper_pid: int,
     if started is not None:
         signals.consume(paths, wrapper_pid, signals.SESSION_STARTED)
         session_id = started.get("sessionId") or session_id
+        transcript_dir = _dir_of(started.get("transcriptPath")) or transcript_dir
 
     for name in _DECISION_SIGNALS:
         payload = signals.read(paths, wrapper_pid, name)
@@ -137,6 +143,7 @@ def _poll_once(services, cfg: Config, wrapper_pid: int,
 
         if name == signals.STOPPED:
             session_id = payload.get("sessionId") or session_id
+            transcript_dir = _dir_of(payload.get("transcriptPath")) or transcript_dir
             active_over_threshold, candidates, current, cache = _refresh_active_usage(services, cfg)
         else:
             active_over_threshold = False
@@ -146,8 +153,8 @@ def _poll_once(services, cfg: Config, wrapper_pid: int,
                                 active_over_threshold=active_over_threshold,
                                 candidates=candidates, current=current, cache=cache)
         if action.kind != "none":
-            return action, session_id
-    return None, session_id
+            return action, session_id, transcript_dir
+    return None, session_id, transcript_dir
 
 
 def _mark_swapping(entry: dict, target: str | None) -> None:
@@ -236,6 +243,8 @@ def run(claude_bin: str, argv: list[str], services, *, spawn: Callable = subproc
 
     registry.update_self(paths, lambda e: e.__setitem__("state", "running"))
     session_id: str | None = None
+    transcript_dir: str | None = None
+    retry_count = 0
     proc = spawn([claude_bin, *argv], env=_spawn_env(wrapper_pid))
 
     while True:
@@ -247,7 +256,8 @@ def run(claude_bin: str, argv: list[str], services, *, spawn: Callable = subproc
         # loop and lose that final signal (a known, accepted v1 limitation —
         # single-shot auto-switch is out of scope).
         while proc.poll() is None:
-            pending, session_id = _poll_once(services, cfg, wrapper_pid, session_id)
+            pending, session_id, transcript_dir = _poll_once(
+                services, cfg, wrapper_pid, session_id, transcript_dir)
             if pending is not None:
                 break
             time.sleep(POLL_INTERVAL)
@@ -264,6 +274,21 @@ def run(claude_bin: str, argv: list[str], services, *, spawn: Callable = subproc
             # child running. `exc` is a SlayerError message and never
             # contains a token, but nothing token-bearing is interpolated here.
             print(f"token-slayer: switch failed ({exc}); continuing on the current account", file=sys.stderr)
+
+        # Space out repeated turn-failure retries with fibonacci backoff so a
+        # sustained API outage doesn't become a terminate/relaunch storm; any
+        # non-retry action (switch/wait) resets the escalation.
+        if pending.kind == "retry_same":
+            time.sleep(relaunch.fibonacci_delay(retry_count))
+            retry_count += 1
+        else:
+            retry_count = 0
+
+        # Recover a missing session id from the transcript directory so the
+        # relaunch --resumes the same conversation instead of starting fresh
+        # (and losing context) when no signal carried a sessionId.
+        if session_id is None and transcript_dir is not None:
+            session_id = relaunch.session_id_from("", transcript_dir)
 
         resume_message = pending.resume_message or cfg.auto_message
         argv = relaunch.relaunch_argv(argv, session_id, auto_resume=cfg.auto_resume, auto_message=resume_message)

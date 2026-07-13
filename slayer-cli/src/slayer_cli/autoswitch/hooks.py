@@ -76,7 +76,7 @@ def _is_wrapped() -> bool:
 
 
 def session_start(stdin: TextIO, stdout: TextIO) -> None:
-    """Handle the SessionStart hook: write SESSION_STARTED{sessionId, cwd}.
+    """Handle the SessionStart hook: write SESSION_STARTED{sessionId, cwd, transcriptPath}.
 
     No-op outside a wrapped session.
 
@@ -90,12 +90,16 @@ def session_start(stdin: TextIO, stdout: TextIO) -> None:
     if pid is None:
         return
     data = _read_json(stdin)
-    payload = {"sessionId": data.get("session_id"), "cwd": data.get("cwd")}
+    payload = {
+        "sessionId": data.get("session_id"),
+        "cwd": data.get("cwd"),
+        "transcriptPath": data.get("transcript_path"),
+    }
     signals.write(Paths(Paths.current_ns()), pid, signals.SESSION_STARTED, payload)
 
 
 def stop(stdin: TextIO) -> None:
-    """Handle the Stop hook: write STOPPED{sessionId}.
+    """Handle the Stop hook: write STOPPED{sessionId, transcriptPath}.
 
     No-op outside a wrapped session. Writes the signal unconditionally — presence
     of the STOPPED signal is the event, payload may be empty (sessionId is None).
@@ -109,7 +113,8 @@ def stop(stdin: TextIO) -> None:
     if pid is None:
         return
     data = _read_json(stdin)
-    signals.write(Paths(Paths.current_ns()), pid, signals.STOPPED, {"sessionId": data.get("session_id")})
+    signals.write(Paths(Paths.current_ns()), pid, signals.STOPPED,
+                  {"sessionId": data.get("session_id"), "transcriptPath": data.get("transcript_path")})
 
 
 def rate_limit(stdin: TextIO) -> None:

@@ -225,3 +225,96 @@ def test_run_returns_child_exit_code_with_no_pending_action(tmp_path, monkeypatc
     assert code == 7
     assert len(spawn.calls) == 1
     assert registry.list(paths) == []
+
+
+def test_active_usage_polls_live_grant_not_stale_slot(tmp_path, monkeypatch):
+    """I1: the ACTIVE account's usage is polled with the LIVE credential Claude
+    Code maintains (which it self-rotates), never the slot's drifted copy — so
+    proactive threshold switching keeps working past the access-token lifetime."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    paths = Paths("token_slayer")
+    store = _setup_accounts(paths)  # slot "a" active with stale token sk-ant-oat01-AAA
+
+    from slayer_cli import credstore
+    credstore.write_active_full(paths, "sk-ant-oat01-LIVE", "ort01-live", 9_999_999_999_999)
+
+    config_store.save(paths, Config(strategy=StrategyConfig(kind="balanced")))
+
+    pid = os.getpid()
+    signals.write(paths, pid, signals.STOPPED, {"sessionId": "s1"})
+
+    seen = {}
+
+    def fake_fetch(token, **kw):
+        seen["token"] = token
+        return AccountUsage(five_hour=Window(utilization=5.0), seven_day=Window(utilization=5.0), polled_at=1)
+
+    monkeypatch.setattr("slayer_cli.usage.oauth.fetch_usage", fake_fetch)
+    monkeypatch.setattr("slayer_cli.autoswitch.wrapper.time.sleep", lambda s: None)
+
+    proc = _FakeProc(auto_exit_after_polls=3)
+    spawn = _fake_spawn([proc])
+    services = Services(paths=paths, store=store)
+    wrapper.run("claude", [], services, spawn=spawn)
+
+    assert seen["token"] == "sk-ant-oat01-LIVE"  # live grant, not the stale slot copy
+
+
+def test_retry_same_applies_fibonacci_backoff(tmp_path, monkeypatch):
+    """I2a: a TURN_FAILED retry_same relaunch is spaced by fibonacci_delay so a
+    sustained API outage does not become a terminate/relaunch storm."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    paths = Paths("token_slayer")
+    store = _setup_accounts(paths)
+    config_store.save(paths, Config(strategy=StrategyConfig(kind="balanced")))
+
+    pid = os.getpid()
+    signals.write(paths, pid, signals.TURN_FAILED, {"message": "500"})
+
+    sleeps = []
+    monkeypatch.setattr("slayer_cli.autoswitch.wrapper.time.sleep", lambda s: sleeps.append(s))
+
+    proc1 = _FakeProc(auto_exit_after_polls=None)  # alive until terminated
+    proc2 = _FakeProc(auto_exit_after_polls=0)     # relaunch exits immediately
+    spawn = _fake_spawn([proc1, proc2])
+    services = Services(paths=paths, store=store)
+    wrapper.run("claude", ["--flag"], services, spawn=spawn)
+
+    assert len(spawn.calls) == 2   # relaunched after the retry
+    assert 1.0 in sleeps           # fibonacci_delay(0) == 1.0 backoff applied before relaunch
+
+
+def test_relaunch_recovers_session_id_from_transcript_when_signal_lacks_it(tmp_path, monkeypatch):
+    """I2b: when no signal carried a sessionId, the wrapper recovers it from the
+    transcript dir so the relaunch --resumes the same conversation (no context loss)."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    paths = Paths("token_slayer")
+    store = _setup_accounts(paths)
+    config_store.save(paths, Config(strategy=StrategyConfig(kind="balanced")))
+
+    tdir = tmp_path / "proj"
+    tdir.mkdir()
+    (tdir / "recovered-sess.jsonl").write_text("{}")
+
+    healthy = AccountUsage(five_hour=Window(utilization=5.0), seven_day=Window(utilization=5.0), polled_at=1)
+    usage_cache.save_cache(paths, {usage_cache.cache_key(store.get("b")): healthy})
+
+    pid = os.getpid()
+    signals.write(paths, pid, signals.STOPPED,
+                  {"sessionId": None, "transcriptPath": str(tdir / "recovered-sess.jsonl")})
+
+    monkeypatch.setattr("slayer_cli.autoswitch.wrapper.time.sleep", lambda s: None)
+    over = AccountUsage(five_hour=Window(utilization=50.0), seven_day=Window(utilization=100.0), polled_at=2)
+    monkeypatch.setattr("slayer_cli.usage.oauth.fetch_usage", lambda token, **kw: over)
+    monkeypatch.setattr("slayer_cli.autoswitch.wrapper.switch_to",
+                        lambda s, n, *, paths, force=False: s.get(n))
+
+    proc1 = _FakeProc(auto_exit_after_polls=None)
+    proc2 = _FakeProc(auto_exit_after_polls=0)
+    spawn = _fake_spawn([proc1, proc2])
+    services = Services(paths=paths, store=store)
+    wrapper.run("claude", ["--flag"], services, spawn=spawn)
+
+    relaunch_argv = spawn.calls[1]["argv"]
+    assert "--resume" in relaunch_argv
+    assert "recovered-sess" in relaunch_argv  # session id recovered from the transcript dir
