@@ -21,14 +21,7 @@ class Recovery:
 
 
 def _binding_reset(u: AccountUsage, thresholds: Thresholds) -> tuple[int | None, bool]:
-    """Return (available_at, only_five_hour): the time this account becomes
-    usable (both windows under threshold) and whether ONLY the 5h window blocks
-    it. None if the blocking window has no reset info.
-
-    :param u: the account's cached usage.
-    :param thresholds: configured thresholds.
-    :return: (available_at or None, only_five_hour).
-    """
+    """Return (available_at, only_five_hour): when this account recovers and why."""
     five_over = u.five_hour is not None and (u.five_hour.utilization >= 100
         or (0 < thresholds.five_hour < 100 and u.five_hour.utilization >= thresholds.five_hour))
     seven_over = u.seven_day is not None and (u.seven_day.utilization >= 100
@@ -86,7 +79,7 @@ def should_rebalance(order: list[str], candidates: list[Candidate], current: Can
         return None
     for name in order:
         c = next((x for x in candidates if x.name == name), None)
-        if c is None or (current and c.name == current.name):
+        if c is None or c.name == current.name:
             continue
         u = cache.get(c.key)
         if u is not None and (u.token_expired or is_over_threshold(u, thresholds)[0]):
