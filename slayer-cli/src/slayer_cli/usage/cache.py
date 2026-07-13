@@ -56,3 +56,16 @@ def save_cache(paths: Paths, cache: dict[str, AccountUsage]) -> None:
     with os.fdopen(fd, "w") as handle:
         handle.write(payload)
     tmp.replace(_cache_path(paths))
+
+def candidate_for(account: Account) -> "Candidate":
+    """Build the strategy Candidate for `account`, keyed so a cache lookup hits.
+
+    This is the single construction point for candidates: `key` is always
+    `cache_key(account)`, so `strategy` sees the same key the usage cache is
+    saved under (a mismatch would silently make the account look unpolled).
+
+    :param account: The account slot.
+    :return: A Candidate with name and cache-matched key.
+    """
+    from slayer_cli.strategy.select import Candidate
+    return Candidate(name=account.name, key=cache_key(account))

@@ -1,3 +1,4 @@
+from slayer_cli.usage.cache import candidate_for, cache_key
 from slayer_cli.usage import cache
 from slayer_cli.models.usage_windows import AccountUsage, Window
 from slayer_cli.models.account import Account
@@ -17,3 +18,8 @@ def test_cache_round_trip(tmp_path, monkeypatch):
     loaded = cache.load_cache(p)
     assert loaded["u1|o1"].five_hour.utilization == 42.0
     assert cache.load_cache(Paths("other_ns")) == {}   # missing → empty
+
+def test_candidate_for_key_matches_cache_key():
+    a = Account(name="work", uuid="u1", org_uuid="o1", token="sk-ant-oat01-TESTTOKEN", added_at=1)
+    c = candidate_for(a)
+    assert c.name == "work" and c.key == cache_key(a) == "u1|o1"
