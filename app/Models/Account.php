@@ -4,7 +4,6 @@ namespace App\Models;
 
 use App\Enums\AccountStatus;
 use App\Enums\MembershipStatus;
-use App\Filament\Resources\Accounts\RelationManagers\ProvisionsRelationManager;
 use App\Support\CacheKeys;
 use Database\Factories\AccountFactory;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -91,8 +90,7 @@ class Account extends Model
      * Users who have had an OAuth grant provisioned for this account
      * (`account_user.provisioned_at` set), regardless of claim/revoke state.
      * Exposes the provisioning audit columns (`token_uuid`, `provisioned_at`,
-     * `claimed_at`, `revoked_at`) on the pivot for
-     * {@see ProvisionsRelationManager}.
+     * `claimed_at`, `revoked_at`) on the pivot for the provisions relation manager.
      *
      * @return BelongsToMany<User, $this>
      */

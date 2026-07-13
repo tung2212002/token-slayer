@@ -3,7 +3,6 @@
 namespace App\Filament\Resources\Accounts\RelationManagers;
 
 use App\Exceptions\AccountConnectException;
-use App\Filament\Concerns\ConnectsAccounts;
 use App\Models\Account;
 use App\Models\User;
 use App\Services\AccountConnectService;
@@ -25,8 +24,7 @@ use Illuminate\Support\Carbon;
  * Per-user OAuth grants provisioned on this `Account` (`account_user` pivot
  * rows with `provisioned_at` set — see {@see Account::provisionedUsers()}).
  * An admin opens the "Provision for user" flow to hand a target user a fresh
- * grant (mirrors {@see ConnectsAccounts}'s two-step
- * connect UX, but exchanges the code via
+ * grant (mirrors the connect UX in ConnectsAccounts, but exchanges the code via
  * {@see AccountProvisioningService::provisionFromCode()} instead of updating
  * this account's own probe grant) and can Revoke a row, which soft-revokes
  * the pivot and forgets the cached grant. The raw grant material itself is
