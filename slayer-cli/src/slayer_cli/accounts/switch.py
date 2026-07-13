@@ -40,6 +40,22 @@ def switch_to(store: AccountStore, name: str, *, paths: Paths) -> Account:
     """
     acc = store.get(name)
     prev = store.active()
+
+    # Capture rotation: if the outgoing (currently-active) slot exists, Claude
+    # Code may have refreshed its token in place since we last switched to it.
+    # Persist the live grant back onto that slot so its refresh token stays
+    # valid across this switch (else the slot goes stale and loses self-refresh).
+    if prev and prev != name and store.exists(prev):
+        live = credstore.read_active_full(paths)
+        if live and live.get("accessToken"):
+            outgoing = store.get(prev)
+            store.add(outgoing.model_copy(update={
+                "token": live["accessToken"],
+                "refresh_token": live.get("refreshToken"),
+                "expires_at": live.get("expiresAt"),
+                "oauth_account": outgoing.oauth_account,
+            }))
+
     # Re-beacon a missing org_uuid (a beacon failure at `add` time can bake
     # an org-less slot) and persist it back so the attribution file can be
     # written correctly rather than left stale.
@@ -47,7 +63,13 @@ def switch_to(store: AccountStore, name: str, *, paths: Paths) -> Account:
     if org and org != acc.org_uuid:
         acc = acc.model_copy(update={"org_uuid": org})
         store.add(acc)
-    credstore.write_active_token(paths, acc.token)
+
+    # Write the incoming slot as a FULL grant (self-refreshing) when it has a
+    # refresh token; otherwise fall back to the legacy null-refresh write.
+    if acc.refresh_token and acc.expires_at:
+        credstore.write_active_full(paths, acc.token, acc.refresh_token, acc.expires_at)
+    else:
+        credstore.write_active_token(paths, acc.token)
     credstore.claude_json.patch_oauth_account(paths, acc.email, acc.uuid, acc.org_uuid)
     store.set_active(name)
     store.touch_last_used(name)
