@@ -251,3 +251,17 @@ def test_setup_with_no_provisioned_accounts_is_friendly(tmp_path, monkeypatch):
     out = CliRunner().invoke(main, ["setup"])
     assert out.exit_code == 0
     assert "no provisioned accounts" in out.output.lower()
+
+
+def test_alias_command_sets_and_clears(tmp_path, monkeypatch):
+    """`alias TARGET NAME` sets an alias (resolving TARGET by slot/alias/
+    email); `alias TARGET` with no NAME clears it."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    store = AccountStore(Paths("token_slayer"))
+    store.add(Account(name="acc1", email="a@b.com", token="sk-ant-oat01-TESTTOKEN", added_at=1))
+    from slayer_cli.cli.main import main
+
+    assert CliRunner().invoke(main, ["alias", "acc1", "work"]).exit_code == 0
+    assert store.get("acc1").alias == "work"
+    assert CliRunner().invoke(main, ["alias", "work"]).exit_code == 0   # resolve by alias, then clear
+    assert store.get("acc1").alias is None
