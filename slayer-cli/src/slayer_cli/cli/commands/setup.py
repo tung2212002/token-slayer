@@ -5,6 +5,7 @@ from __future__ import annotations
 import click
 
 from slayer_cli.accounts import provisioned
+from slayer_cli.errors import SlayerError
 
 __all__ = ["command"]
 
@@ -18,7 +19,10 @@ def command(services) -> None:
     if not token_file.is_file():
         raise click.ClickException("No hook token found — install token-slayer first.")
     hook_token = token_file.read_text().strip()
-    names = provisioned.pull_and_setup(paths, hook_token)
+    try:
+        names = provisioned.pull_and_setup(paths, hook_token)
+    except SlayerError as exc:
+        raise click.ClickException(str(exc)) from exc
     if not names:
         click.echo("No provisioned accounts available. Ask your admin to provision one.")
         return

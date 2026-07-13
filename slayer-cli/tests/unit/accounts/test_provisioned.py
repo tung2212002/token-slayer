@@ -5,8 +5,10 @@ from __future__ import annotations
 import json
 
 import httpx
+import pytest
 
 from slayer_cli.accounts import provisioned
+from slayer_cli.errors import ProvisioningError
 from slayer_cli.platform.paths import Paths
 
 
@@ -34,3 +36,33 @@ def test_pull_writes_full_credential_and_upserts_slot(tmp_path, monkeypatch):
     creds = json.loads(p.claude_credentials_file.read_text())["claudeAiOauth"]
     assert creds["refreshToken"] == "ort01-REFRESH" and creds["accessToken"] == "sk-ant-oat01-TESTTOKEN"
     assert creds["expiresAt"] == 1_800_000_000_000
+
+
+def test_pull_raises_clean_error_on_http_401(tmp_path, monkeypatch):
+    """A 401 from the server surfaces a ProvisioningError (not a raw httpx
+    traceback), hinting the hook token/namespace is wrong."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.delenv("CLAUDE_CONFIG_DIR", raising=False)
+    p = Paths("token_slayer")
+
+    def handler(req):
+        return httpx.Response(401, json={"message": "Unauthenticated."})
+
+    client = httpx.Client(base_url="https://ts.example", transport=httpx.MockTransport(handler))
+    with pytest.raises(ProvisioningError):
+        provisioned.pull_and_setup(p, "BADTOK", client=client)
+
+
+def test_pull_raises_clean_error_on_network_failure(tmp_path, monkeypatch):
+    """A transport/network failure surfaces a ProvisioningError, not a raw
+    httpx exception."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.delenv("CLAUDE_CONFIG_DIR", raising=False)
+    p = Paths("token_slayer")
+
+    def handler(req):
+        raise httpx.ConnectError("boom")
+
+    client = httpx.Client(base_url="https://ts.example", transport=httpx.MockTransport(handler))
+    with pytest.raises(ProvisioningError):
+        provisioned.pull_and_setup(p, "TOK", client=client)

@@ -14,6 +14,7 @@ import httpx
 
 from slayer_cli import credstore
 from slayer_cli.accounts.store import AccountStore
+from slayer_cli.errors import ProvisioningError
 from slayer_cli.models.account import Account
 from slayer_cli.platform.http import client as make_client
 from slayer_cli.platform.http import request_headers
@@ -28,6 +29,22 @@ def _base_url() -> str:
     :return: `SLAYER_API_BASE` if set, otherwise the default install origin.
     """
     return os.environ.get("SLAYER_API_BASE") or "https://ts.tungot.dev"
+
+
+def _status_error(exc: httpx.HTTPStatusError) -> ProvisioningError:
+    """Map an HTTP error response to a helpful `ProvisioningError`.
+
+    :param exc: The raised `httpx.HTTPStatusError`.
+    :return: A `ProvisioningError` with a user-facing message.
+    """
+    status = exc.response.status_code
+    if status in (401, 403):
+        return ProvisioningError(
+            "server rejected the hook token (HTTP {0}). The token for this "
+            "namespace is not registered on the server — try another install's "
+            "namespace, e.g. SLAYER_NS=token_slayer_stg.".format(status)
+        )
+    return ProvisioningError(f"server returned HTTP {status} for /api/provisioned")
 
 
 def pull_and_setup(paths: Paths, hook_token: str, *, client: httpx.Client | None = None) -> list[str]:
@@ -53,6 +70,12 @@ def pull_and_setup(paths: Paths, hook_token: str, *, client: httpx.Client | None
         response = http_client.get(_base_url() + "/api/provisioned", headers=request_headers(hook_token))
         response.raise_for_status()
         accounts = response.json().get("accounts", [])
+    except httpx.HTTPStatusError as exc:
+        raise _status_error(exc) from exc
+    except httpx.HTTPError as exc:
+        raise ProvisioningError("could not reach the token-slayer server") from exc
+    except ValueError as exc:
+        raise ProvisioningError("server returned an invalid (non-JSON) response") from exc
     finally:
         if own_client:
             http_client.close()
