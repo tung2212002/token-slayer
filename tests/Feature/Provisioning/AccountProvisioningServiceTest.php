@@ -43,12 +43,14 @@ it('writes tracking to the pivot and the encrypted grant to the cache', function
         ->and($decoded['org_uuid'])->toBe('org-1')
         ->and($decoded['expires_at'])->toBeInt();
 
-    // claimableFor returns it; claimed + revoked rows are excluded.
+    // claimableFor returns provisioned rows INCLUDING already-claimed ones
+    // (setup is idempotent while the cache secret lives); only revoked rows
+    // are excluded. So the original + the claimed row = 2; revoked dropped.
     $claimed = Account::factory()->create();
     $revoked = Account::factory()->create();
     $user->accounts()->syncWithoutDetaching([
         $claimed->id => ['status' => MembershipStatus::Tracked->value, 'provisioned_at' => now(), 'claimed_at' => now()],
         $revoked->id => ['status' => MembershipStatus::Tracked->value, 'provisioned_at' => now(), 'revoked_at' => now()],
     ]);
-    expect($service->claimableFor($user))->toHaveCount(1);
+    expect($service->claimableFor($user))->toHaveCount(2);
 });

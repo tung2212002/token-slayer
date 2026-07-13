@@ -96,7 +96,10 @@ final class AccountProvisioningService
     }
 
     /**
-     * The user's grants that are provisioned, not revoked, and not yet claimed.
+     * The user's grants that are provisioned and not revoked. Already-claimed
+     * rows are INCLUDED — availability is decided by whether the encrypted
+     * cache secret still exists (see {@see claim()}), so setup can be re-run
+     * idempotently for the 24 h the secret lives.
      *
      * @param  User  $user  the user pulling grants
      * @return Collection<int, AccountUser>
@@ -107,15 +110,17 @@ final class AccountProvisioningService
             ->where('user_id', $user->id)
             ->whereNotNull('provisioned_at')
             ->whereNull('revoked_at')
-            ->whereNull('claimed_at')
             ->get();
     }
 
     /**
-     * Read, return, and consume every claimable grant for a user. For each
-     * claimable pivot the encrypted cache secret is decrypted into its payload;
-     * rows whose cache entry has expired are skipped. A served row is marked
-     * claimed and its cache key forgotten (one-time handoff).
+     * Read and return every provisioned grant for a user whose encrypted cache
+     * secret is still present, decrypted into its payload. This is idempotent
+     * within the secret's 24 h TTL: the cache is NOT consumed, so re-running
+     * setup returns the same grants until the secret expires or the provision
+     * is revoked (which forgets the secret). The first successful read records
+     * {@see AccountUser::claimed_at}; later reads leave it unchanged. Rows whose
+     * cache entry is gone are skipped.
      *
      * @param  User  $user  the hook-authenticated user pulling grants
      * @return array<int, array<string, mixed>> the decoded grant payloads
@@ -128,12 +133,13 @@ final class AccountProvisioningService
             $key = $this->cacheKey($pivot->user_id, $pivot->account_id);
             $raw = Cache::get($key);
             if ($raw === null) {
-                continue; // cache secret expired — nothing to hand off
+                continue; // cache secret expired/revoked — nothing to hand off
             }
 
             $payloads[] = json_decode(Crypt::decryptString($raw), true);
-            $pivot->forceFill(['claimed_at' => Carbon::now()])->save();
-            Cache::forget($key);
+            if ($pivot->claimed_at === null) {
+                $pivot->forceFill(['claimed_at' => Carbon::now()])->save();
+            }
         }
 
         return $payloads;
