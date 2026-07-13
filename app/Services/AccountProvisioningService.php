@@ -138,4 +138,18 @@ final class AccountProvisioningService
 
         return $payloads;
     }
+
+    /**
+     * Soft-revoke a provision: mark it revoked and forget the cached grant so
+     * a future claim cannot re-serve it. (A grant already handed to a client
+     * must be deleted separately at claude.ai using its token_uuid.)
+     *
+     * @param  AccountUser  $pivot  the provision to revoke
+     * @return void
+     */
+    public function revoke(AccountUser $pivot): void
+    {
+        $pivot->forceFill(['revoked_at' => Carbon::now()])->save();
+        Cache::forget($this->cacheKey($pivot->user_id, $pivot->account_id));
+    }
 }
