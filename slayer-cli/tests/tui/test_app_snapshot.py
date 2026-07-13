@@ -24,7 +24,13 @@ def _account(name: str, org_uuid: str) -> Account:
 
 
 def test_accounts_page_initial_render(tmp_path, monkeypatch, snap_compare):
+    # Freeze BOTH wall-clock sources so the baseline is time-independent:
+    #  - the Header's live clock (textual's datetime.now())
+    #  - reset_countdown's time.time() (renders the "in <N>d <N>h" column)
+    # Without the second freeze the countdown drifts hour-by-hour and the
+    # committed SVG breaks on other days/machines.
     monkeypatch.setattr("textual.widgets._header.datetime", _FrozenDateTime)
+    monkeypatch.setattr("slayer_cli.tui.format.time.time", lambda: 1_700_000_000.0)
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.delenv("CLAUDE_CONFIG_DIR", raising=False)
     paths = Paths("token_slayer")
