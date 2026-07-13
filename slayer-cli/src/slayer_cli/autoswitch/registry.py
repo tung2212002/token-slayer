@@ -31,6 +31,7 @@ def update_self(paths: Paths, mutate) -> None:
             entry.update(json.loads(path.read_text()))
         except ValueError:
             pass
+    entry["cwd"] = os.getcwd()
     mutate(entry)
     entry["updated_at"] = int(time.time())
     tmp = path.with_suffix(".tmp")
