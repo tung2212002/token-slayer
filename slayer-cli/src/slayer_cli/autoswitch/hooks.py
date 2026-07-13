@@ -14,16 +14,24 @@ import os
 import re
 from typing import TextIO
 
+from slayer_cli.accounts.store import AccountStore
 from slayer_cli.autoswitch import classify, signals
+from slayer_cli.config import store as config_store
+from slayer_cli.models.usage_windows import AccountUsage
 from slayer_cli.platform.paths import Paths
+from slayer_cli.usage import cache as usage_cache
 
 __all__ = ["session_start", "stop", "rate_limit", "prompt_submit"]
 
 # Matches `/switch` or `/switch <target>`, capturing the trailing target text.
 _SWITCH_PATTERN = re.compile(r"^/switch\b\s*(.*)$")
 
-# Matches the `/ts:<cmd>` slash-command prefix.
-_TS_PATTERN = re.compile(r"^/ts:(\S*)")
+# Matches the `/ts:<cmd>` slash-command prefix, capturing the command word and
+# any trailing argument text (e.g. `/ts:switch work` -> ("switch", "work")).
+_TS_PATTERN = re.compile(r"^/ts:(\S*)\s*(.*)$")
+
+# `/ts:` subcommands that render the account/usage summary (aliases of the same view).
+_TS_SUMMARY_COMMANDS = frozenset({"list", "status", "usage"})
 
 
 def _read_json(stdin: TextIO) -> dict:
@@ -128,16 +136,67 @@ def rate_limit(stdin: TextIO) -> None:
     signals.write(Paths(Paths.current_ns()), pid, name, {"error": text})
 
 
+def _usage_fragment(usage: AccountUsage | None) -> str:
+    """Render a one-line utilization fragment for `/ts:list`-style output.
+
+    :param usage: Cached usage for the account, or None when unpolled.
+    :return: `"5h NN%  7d NN%"`, with `—` for missing windows, or
+        `"no cached usage yet"` when `usage` is `None`.
+    """
+    if usage is None:
+        return "no cached usage yet"
+    five = f"{usage.five_hour.utilization:.0f}%" if usage.five_hour else "—"
+    seven = f"{usage.seven_day.utilization:.0f}%" if usage.seven_day else "—"
+    return f"5h {five}  7d {seven}"
+
+
+def _render_account_summary(paths: Paths) -> str:
+    """Render a token-free account/usage summary for `/ts:list|status|usage`.
+
+    Reads the already-populated usage cache (`usage.cache.load_cache`,
+    written by the wrapper's poll loop) — never fetches over the network,
+    so the hook stays fast and never blocks the prompt on I/O.
+
+    :param paths: Resolved OS paths for this namespace.
+    :return: A friendly "no accounts" line when no slots exist, else one
+        line per account slot (marker, name, email, cached utilization).
+    """
+    store = AccountStore(paths)
+    accounts = store.list()
+    if not accounts:
+        return "No account slots yet. Add one with `token-slayer add <name>`."
+    active = store.active()
+    cache = usage_cache.load_cache(paths)
+    lines = ["Accounts:"]
+    for account in accounts:
+        marker = "*" if account.name == active else " "
+        usage = cache.get(usage_cache.cache_key(account))
+        lines.append(f"{marker} {account.name}  {account.email or '-'}  {_usage_fragment(usage)}")
+    return "\n".join(lines)
+
+
+def _render_config(paths: Paths) -> str:
+    """Render the current behaviour config as indented JSON for `/ts:config`.
+
+    :param paths: Resolved OS paths for this namespace.
+    :return: `Config.model_dump_json(indent=2)` for the loaded config.
+    """
+    cfg = config_store.load(paths)
+    return cfg.model_dump_json(indent=2)
+
+
 def prompt_submit(stdin: TextIO, stdout: TextIO) -> None:
     """Handle the UserPromptSubmit hook: intercept `/switch` and `/ts:` prompts.
 
     `/switch [target]` writes SWITCH_REQUESTED{target} (target empty = rotate).
-    `/ts:<cmd>` writes a short inline hint to stdout (full rendering is a
-    later task). Any other prompt passes through untouched. No-op outside a
-    wrapped session.
+    `/ts:list`, `/ts:status`, and `/ts:usage` render an inline account/usage
+    summary (never a token). `/ts:config` renders the current config as JSON.
+    `/ts:switch [target]` behaves exactly like `/switch`. Any other `/ts:<cmd>`
+    falls back to a short inline hint. Any other prompt passes through
+    untouched. No-op outside a wrapped session.
 
     :param stdin: Stream carrying Claude Code's hook JSON payload.
-    :param stdout: Stream to write an inline hint to, for `/ts:` prompts.
+    :param stdout: Stream to write inline rendering to, for `/ts:` prompts.
     :return: None
     """
     if not _is_wrapped():
@@ -147,15 +206,26 @@ def prompt_submit(stdin: TextIO, stdout: TextIO) -> None:
         return
     data = _read_json(stdin)
     prompt = data.get("prompt") or ""
+    paths = Paths(Paths.current_ns())
 
     switch_match = _SWITCH_PATTERN.match(prompt)
     if switch_match:
         target = switch_match.group(1).strip()
-        signals.write(Paths(Paths.current_ns()), pid, signals.SWITCH_REQUESTED, {"target": target})
+        signals.write(paths, pid, signals.SWITCH_REQUESTED, {"target": target})
         return
 
     ts_match = _TS_PATTERN.match(prompt)
     if ts_match:
-        cmd = ts_match.group(1) or "<cmd>"
-        stdout.write(f"run token-slayer {cmd}\n")
+        cmd = ts_match.group(1) or ""
+        rest = ts_match.group(2).strip()
+        if cmd in _TS_SUMMARY_COMMANDS:
+            stdout.write(_render_account_summary(paths) + "\n")
+            return
+        if cmd == "config":
+            stdout.write(_render_config(paths) + "\n")
+            return
+        if cmd == "switch":
+            signals.write(paths, pid, signals.SWITCH_REQUESTED, {"target": rest})
+            return
+        stdout.write(f"run token-slayer {cmd or '<cmd>'}\n")
         return

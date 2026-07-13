@@ -10,6 +10,25 @@ class ConfigError(SlayerError):
     """Raised on an unknown key or an invalid value."""
 
 
+_STRATEGY_CYCLE: tuple[str, ...] = ("manual", "balanced", "drain")
+"""The fixed manual→balanced→drain→manual cycle order used by `next_strategy_kind`."""
+
+
+def next_strategy_kind(current: str) -> str:
+    """Return the next `strategy.kind` in the manual->balanced->drain->manual
+    cycle, used by the TUI's strategy-cycle keybinding.
+
+    :param current: The current `strategy.kind` value.
+    :return: The next kind in the cycle; an unrecognized `current` resets to
+        `"manual"` rather than raising.
+    """
+    try:
+        index = _STRATEGY_CYCLE.index(current)
+    except ValueError:
+        return _STRATEGY_CYCLE[0]
+    return _STRATEGY_CYCLE[(index + 1) % len(_STRATEGY_CYCLE)]
+
+
 def load(paths: Paths) -> Config:
     """Return the config merged with defaults; a missing/corrupt file yields defaults.
 

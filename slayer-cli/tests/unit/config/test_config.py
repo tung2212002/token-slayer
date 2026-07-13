@@ -33,3 +33,13 @@ def test_set_rejects_bad_values(tmp_path, monkeypatch):
         store.set_value(cfg, "thresholds.five_hour", "150")
     with pytest.raises(store.ConfigError):
         store.set_value(cfg, "unknown.key", "x")
+
+
+def test_next_strategy_kind_cycles_manual_balanced_drain():
+    assert store.next_strategy_kind("manual") == "balanced"
+    assert store.next_strategy_kind("balanced") == "drain"
+    assert store.next_strategy_kind("drain") == "manual"
+
+
+def test_next_strategy_kind_resets_unknown_to_manual():
+    assert store.next_strategy_kind("bogus") == "manual"

@@ -5,8 +5,13 @@ from __future__ import annotations
 import io
 import json
 
+from slayer_cli.accounts.store import AccountStore
 from slayer_cli.autoswitch import hooks, signals
+from slayer_cli.config import store as config_store
+from slayer_cli.models.account import Account
+from slayer_cli.models.usage_windows import AccountUsage, Window
 from slayer_cli.platform.paths import Paths
+from slayer_cli.usage import cache as usage_cache
 
 
 def _env(monkeypatch, tmp_path, pid):
@@ -147,14 +152,111 @@ def test_prompt_submit_switch_no_target_is_empty(tmp_path, monkeypatch):
     assert sig["target"] == ""
 
 
-def test_prompt_submit_ts_prefix_hints_inline(tmp_path, monkeypatch):
-    """prompt_submit on `/ts:status` writes an inline hint to stdout, no signal, no token."""
+def test_prompt_submit_ts_unknown_cmd_hints_inline(tmp_path, monkeypatch):
+    """prompt_submit on an unrecognized `/ts:<cmd>` falls back to the inline hint."""
     pid = 11
     _env(monkeypatch, tmp_path, pid)
     out = io.StringIO()
-    hooks.prompt_submit(io.StringIO(json.dumps({"prompt": "/ts:status"})), out)
+    hooks.prompt_submit(io.StringIO(json.dumps({"prompt": "/ts:frobnicate"})), out)
     assert signals.read(Paths("token_slayer"), pid, signals.SWITCH_REQUESTED) is None
-    assert "token-slayer status" in out.getvalue()
+    assert "token-slayer frobnicate" in out.getvalue()
+    assert "sk-ant" not in out.getvalue()
+
+
+def _seed_account(paths: Paths, name: str, *, active: bool = False) -> Account:
+    """Add an account slot (with a fake token) to `paths`' AccountStore.
+
+    :param paths: Resolved OS paths for this namespace.
+    :param name: Slot name.
+    :param active: Whether to mark this slot active.
+    :return: The seeded Account.
+    """
+    account = Account(
+        name=name, email=f"{name}@example.com", org_uuid=f"org-{name}", uuid=f"uuid-{name}",
+        plan=None, token="sk-ant-oat01-TESTTOKEN", added_at=1, last_used=None,
+    )
+    store = AccountStore(paths)
+    store.add(account)
+    if active:
+        store.set_active(name)
+    return account
+
+
+def test_prompt_submit_ts_list_renders_accounts_no_token(tmp_path, monkeypatch):
+    """`/ts:list` renders account names/usage inline, writes no signal, never a token."""
+    pid = 20
+    _env(monkeypatch, tmp_path, pid)
+    paths = Paths("token_slayer")
+    _seed_account(paths, "work", active=True)
+    _seed_account(paths, "personal")
+
+    out = io.StringIO()
+    hooks.prompt_submit(io.StringIO(json.dumps({"prompt": "/ts:list"})), out)
+
+    rendered = out.getvalue()
+    assert "work" in rendered
+    assert "personal" in rendered
+    assert "sk-ant" not in rendered
+    assert signals.read(Paths("token_slayer"), pid, signals.SWITCH_REQUESTED) is None
+
+
+def test_prompt_submit_ts_list_includes_cached_usage(tmp_path, monkeypatch):
+    """`/ts:list` surfaces cached utilization percentages when the usage cache is populated."""
+    pid = 21
+    _env(monkeypatch, tmp_path, pid)
+    paths = Paths("token_slayer")
+    account = _seed_account(paths, "work", active=True)
+    usage_cache.save_cache(
+        paths,
+        {usage_cache.cache_key(account): AccountUsage(five_hour=Window(utilization=42.0), seven_day=Window(utilization=18.0))},
+    )
+
+    out = io.StringIO()
+    hooks.prompt_submit(io.StringIO(json.dumps({"prompt": "/ts:usage"})), out)
+
+    rendered = out.getvalue()
+    assert "42" in rendered
+    assert "18" in rendered
+    assert "sk-ant" not in rendered
+
+
+def test_prompt_submit_ts_list_no_accounts_is_friendly(tmp_path, monkeypatch):
+    """`/ts:status` with no account slots renders a friendly message, not a crash."""
+    pid = 22
+    _env(monkeypatch, tmp_path, pid)
+    out = io.StringIO()
+    hooks.prompt_submit(io.StringIO(json.dumps({"prompt": "/ts:status"})), out)
+    rendered = out.getvalue()
+    assert rendered.strip() != ""
+    assert "sk-ant" not in rendered
+
+
+def test_prompt_submit_ts_config_renders_json(tmp_path, monkeypatch):
+    """`/ts:config` renders the current config as JSON."""
+    pid = 23
+    _env(monkeypatch, tmp_path, pid)
+    paths = Paths("token_slayer")
+    cfg = config_store.load(paths)
+    cfg = config_store.set_value(cfg, "strategy.kind", "balanced")
+    config_store.save(paths, cfg)
+
+    out = io.StringIO()
+    hooks.prompt_submit(io.StringIO(json.dumps({"prompt": "/ts:config"})), out)
+
+    rendered = out.getvalue()
+    parsed = json.loads(rendered)
+    assert parsed["strategy"]["kind"] == "balanced"
+    assert "sk-ant" not in rendered
+
+
+def test_prompt_submit_ts_switch_writes_signal(tmp_path, monkeypatch):
+    """`/ts:switch <target>` behaves exactly like `/switch <target>`."""
+    pid = 24
+    _env(monkeypatch, tmp_path, pid)
+    out = io.StringIO()
+    hooks.prompt_submit(io.StringIO(json.dumps({"prompt": "/ts:switch work"})), out)
+    sig = signals.read(Paths("token_slayer"), pid, signals.SWITCH_REQUESTED)
+    assert sig == {"target": "work"}
     assert "sk-ant" not in out.getvalue()
 
 

@@ -64,6 +64,26 @@ async def test_switch_key_switches_selected(tmp_path, monkeypatch):
 
 
 @pytest.mark.anyio
+async def test_cycle_strategy_key_updates_config_and_label(tmp_path, monkeypatch):
+    paths, _store = _seed_two_accounts(tmp_path, monkeypatch)
+    _stub_switch_credential_writes(monkeypatch)
+    _stub_usage_service(monkeypatch)
+
+    from slayer_cli.config import store as config_store
+    from slayer_cli.tui.app import SlayerApp
+
+    app = SlayerApp(paths)
+    async with app.run_test() as pilot:
+        assert "manual" in app.sub_title
+        await pilot.press("c")
+        assert "balanced" in app.sub_title
+        await pilot.press("c")
+        assert "drain" in app.sub_title
+
+    assert config_store.load(paths).strategy.kind == "drain"
+
+
+@pytest.mark.anyio
 async def test_quit_key_exits(tmp_path, monkeypatch):
     paths, _store = _seed_two_accounts(tmp_path, monkeypatch)
     _stub_switch_credential_writes(monkeypatch)

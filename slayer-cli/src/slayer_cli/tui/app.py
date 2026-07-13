@@ -12,6 +12,7 @@ from textual.widgets import DataTable, Footer, Header
 
 from slayer_cli.accounts.store import AccountStore
 from slayer_cli.accounts.switch import switch_to
+from slayer_cli.config import store as config_store
 from slayer_cli.errors import SlayerError
 from slayer_cli.models.account import Account
 from slayer_cli.models.usage import UsageSnapshot
@@ -52,6 +53,7 @@ class SlayerApp(App):
         ("G", "cursor_bottom", "Bottom"),
         ("s", "switch_selected", "Switch"),
         ("r", "refresh", "Refresh"),
+        ("c", "cycle_strategy", "Strategy"),
         ("q", "quit", "Quit"),
     ]
 
@@ -85,6 +87,7 @@ class SlayerApp(App):
         :return: None
         """
         self._rebuild_table()
+        self._refresh_strategy_label()
         self._start_refresh()
         self.set_interval(REFRESH_INTERVAL_SECONDS, self._start_refresh)
 
@@ -223,3 +226,26 @@ class SlayerApp(App):
         """
         self._snapshots[name] = snapshot
         self._rebuild_table()
+
+    # -- strategy cycling (`c`) ------------------------------------------
+
+    def action_cycle_strategy(self) -> None:
+        """Cycle `strategy.kind` manual->balanced->drain->manual via
+        `config.store`, persist it, and refresh the visible label.
+
+        :return: None
+        """
+        cfg = config_store.load(self._paths)
+        next_kind = config_store.next_strategy_kind(cfg.strategy.kind)
+        cfg = config_store.set_value(cfg, "strategy.kind", next_kind)
+        config_store.save(self._paths, cfg)
+        self._refresh_strategy_label()
+        self.notify(f"Strategy: {next_kind}", timeout=2)
+
+    def _refresh_strategy_label(self) -> None:
+        """Set the Header's subtitle to show the current `strategy.kind`.
+
+        :return: None
+        """
+        cfg = config_store.load(self._paths)
+        self.sub_title = f"strategy: {cfg.strategy.kind}"
