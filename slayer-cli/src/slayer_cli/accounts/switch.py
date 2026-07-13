@@ -21,14 +21,17 @@ def switch_to(store: AccountStore, name: str, *, paths: Paths) -> Account:
 
     Pipeline (each step only runs after the previous one succeeds, so a
     failed credential write never leaves `state.json`/`active.json`
-    pointing at a credential that wasn't actually written): resolve the
-    slot's `org_uuid` (re-beaconing and persisting it back if missing),
-    write the token to the active credential store, patch `.claude.json`'s
-    `.oauthAccount` block, set the active slot + touch its `last_used`,
-    then reconcile the provider `active.json` attribution file — rewritten
-    with the resolved org when known, or REMOVED when the org can't be
-    resolved (never left stale, pointing at the previous account) — and
-    finally append a history entry.
+    pointing at a credential that wasn't actually written): capture the
+    outgoing (currently-active) slot's rotated live grant before switching
+    away (preserves its refresh token), resolve the incoming slot's
+    `org_uuid` (re-beaconing and persisting it back if missing), write the
+    incoming slot as a full grant when it has a refresh token + expires_at
+    (self-refreshing), else fall back to token-only write, patch
+    `.claude.json`'s `.oauthAccount` block, set the active slot + touch its
+    `last_used`, then reconcile the provider `active.json` attribution file
+    — rewritten with the resolved org when known, or REMOVED when the org
+    can't be resolved (never left stale, pointing at the previous account) —
+    and finally append a history entry.
 
     :param store: Account slot store.
     :param name: Slot name to switch to.
@@ -53,7 +56,6 @@ def switch_to(store: AccountStore, name: str, *, paths: Paths) -> Account:
                 "token": live["accessToken"],
                 "refresh_token": live.get("refreshToken"),
                 "expires_at": live.get("expiresAt"),
-                "oauth_account": outgoing.oauth_account,
             }))
 
     # Re-beacon a missing org_uuid (a beacon failure at `add` time can bake
