@@ -310,3 +310,32 @@ def test_alias_command_sets_and_clears(tmp_path, monkeypatch):
     assert result2.exit_code == 0
     assert "sk-ant" not in result2.output
     assert store.get("acc1").alias is None
+
+
+def test_detect_base_command_adds_current_login(tmp_path, monkeypatch):
+    """`detect-base` registers the machine's current Claude login as a slot."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    from slayer_cli.accounts import base as base_mod
+    from slayer_cli.models.account import Account
+
+    detected = Account(name="me", email="me@x.com", uuid="u-1", org_uuid="org-1",
+                       plan=None, token="sk-ant-oat01-CUR", added_at=1)
+    monkeypatch.setattr(base_mod, "detect_current", lambda paths: detected)
+
+    from slayer_cli.cli.main import main
+    out = CliRunner().invoke(main, ["detect-base"])
+    assert out.exit_code == 0
+    assert "me@x.com" in out.output
+    assert "sk-ant" not in out.output
+
+
+def test_detect_base_command_is_friendly_with_no_login(tmp_path, monkeypatch):
+    """`detect-base` with no active login prints a friendly message, not an error."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    from slayer_cli.accounts import base as base_mod
+    monkeypatch.setattr(base_mod, "detect_current", lambda paths: None)
+
+    from slayer_cli.cli.main import main
+    out = CliRunner().invoke(main, ["detect-base"])
+    assert out.exit_code == 0
+    assert "No active Claude login" in out.output

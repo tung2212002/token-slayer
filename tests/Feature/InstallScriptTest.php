@@ -359,6 +359,22 @@ it('sets up a python venv and installs slayer-cli, with a shim that execs the ve
         ->toContain('SLAYER_INSTALL_URL=');
 });
 
+it('registers the current Claude login as a base account slot after installing the CLI', function () {
+    $script = $this->get(route('install-script'))->content();
+
+    // Best-effort, namespaced, never blocks the install.
+    expect($script)
+        ->toContain('-m slayer_cli detect-base')
+        ->toContain('SLAYER_NS=token_slayer');
+
+    // It must run AFTER the shim is written (needs the venv/package present).
+    $shimPos = strpos($script, 'chmod +x "$HOME/.local/bin/token-slayer"');
+    $detectPos = strpos($script, '-m slayer_cli detect-base');
+    expect($shimPos)->not->toBeFalse()
+        ->and($detectPos)->not->toBeFalse()
+        ->and($shimPos)->toBeLessThan($detectPos);
+});
+
 it('downloads the wheel to a PEP 427-valid temp name before pip-installing (pip rejects slayer_cli-latest.whl)', function () {
     $script = $this->get(route('install-script'))->content();
 

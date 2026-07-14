@@ -457,6 +457,14 @@ CLI_SH
 chmod +x "$HOME/.local/bin/token-slayer"
 ln -sf "$HOME/.local/bin/token-slayer" "$HOME/.local/bin/slayer"
 
+# Register the machine's current Claude login as a base account slot, so a user
+# who already uses Claude Code sees their existing account in token-slayer right
+# away. Idempotent + identity-deduplicated (skips when absent or already
+# tracked) and best-effort -- never blocks the install.
+if [ -x "$HOME/.config/{{ $namespace }}/venv/bin/python" ]; then
+  SLAYER_NS={{ $namespace }} "$HOME/.config/{{ $namespace }}/venv/bin/python" -m slayer_cli detect-base >/dev/null 2>&1 || true
+fi
+
 case ":$PATH:" in
   *":$HOME/.local/bin:"*) ;;
   *) for rc in "$HOME/.zshrc" "$HOME/.bashrc"; do
