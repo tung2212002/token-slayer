@@ -245,11 +245,14 @@ it('merges account_org_id into the outgoing event body when resolved', function 
     expect($mergeBlock)->toContain('account_org_id');
 });
 
-it('bumps the client version to 4 for the multi-account attribution rollout', function () {
+it('stamps the client version (semver) into the script, UA, and version file', function () {
+    $version = config('token_slayer.client_version');
     $script = $this->get(route('install-script'))->content();
 
-    expect(config('token_slayer.client_version'))->toBe('4')
-        ->and($script)->toContain("CLIENT_VERSION='4'");
+    expect($version)->toBe('1.0.0')
+        ->and($script)->toContain("CLIENT_VERSION='1.0.0'")
+        ->and($script)->toContain('token-slayer-hook/1.0.0')
+        ->and($script)->toContain("LATEST='1.0.0'");
 });
 
 it('tips users toward custom.sh to customize what their fighter shows, at the end of a successful install', function () {
