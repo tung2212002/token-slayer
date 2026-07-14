@@ -46,3 +46,20 @@ test('it returns an empty array when every event is attributed or has no beacon'
 
     expect(app(UnrecognizedAccountsQuery::class)->get())->toBe([]);
 });
+
+it('orders unrecognized organizations by last seen descending', function () {
+    $userA = User::factory()->create();
+    $userB = User::factory()->create();
+
+    // org "recent" last event now; org "stale" last event a day ago.
+    // Uuids are chosen so alphabetical order is the OPPOSITE of recency order:
+    // this way a stale COUNT(*)-DESC tie-break (which falls back to something
+    // alphabetical-ish) would produce org-a-stale first, while the real
+    // MAX(created_at) DESC ordering puts org-z-recent first.
+    Event::factory()->for($userA)->create(['account_id' => null, 'account_org_id' => 'org-a-stale', 'created_at' => now()->subDay()]);
+    Event::factory()->for($userB)->create(['account_id' => null, 'account_org_id' => 'org-z-recent', 'created_at' => now()]);
+
+    $rows = app(UnrecognizedAccountsQuery::class)->get();
+
+    expect(collect($rows)->pluck('org_uuid')->all())->toBe(['org-z-recent', 'org-a-stale']);
+});
