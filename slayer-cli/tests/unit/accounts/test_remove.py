@@ -73,3 +73,35 @@ def test_removing_a_non_active_slot_leaves_the_active_pointer_alone(tmp_path, mo
 
     assert store.active() == "home@x.com"
     assert paths.active_file.exists()
+
+
+def test_removing_the_active_slot_switches_to_the_remaining_account(tmp_path, monkeypatch):
+    """When an account remains after removing the active one, it becomes
+    active (a real switch — credential + attribution written for it) rather
+    than leaving no account active."""
+    paths = _paths(tmp_path, monkeypatch)
+    store = AccountStore(paths)
+    store.add(_account("work@x.com"))
+    store.add(_account("home@x.com"))
+    store.set_active("work@x.com")
+
+    remove_account(store, paths, "work@x.com")
+
+    assert store.active() == "home@x.com"
+    provider = json.loads(paths.active_file.read_text())
+    assert provider["email"] == "home@x.com"
+
+
+def test_removing_the_active_slot_prefers_the_most_recently_used_remaining_account(tmp_path, monkeypatch):
+    """With more than one remaining account, the most-recently-used one
+    becomes active — the most likely one the user actually wants next."""
+    paths = _paths(tmp_path, monkeypatch)
+    store = AccountStore(paths)
+    store.add(_account("work@x.com"))
+    store.add(_account("home@x.com").model_copy(update={"last_used": 100}))
+    store.add(_account("side@x.com").model_copy(update={"last_used": 200}))
+    store.set_active("work@x.com")
+
+    remove_account(store, paths, "work@x.com")
+
+    assert store.active() == "side@x.com"
