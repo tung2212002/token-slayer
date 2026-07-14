@@ -95,3 +95,17 @@ def test_install_creates_settings_file_from_scratch(tmp_path, monkeypatch):
     assert "hooks" in data
     # All our specs must be present.
     assert hookinstall.installed(p) is True
+
+
+def test_install_honors_ts_hook_bin_override(tmp_path, monkeypatch):
+    """TS_HOOK_BIN overrides the hook command's binary, so Claude's hooks reach
+    THIS CLI even when a different `token-slayer` (the attribution shim) shadows
+    it on PATH; installed() still detects the overridden command."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("TS_HOOK_BIN", "/opt/venv/bin/slayer")
+    p = Paths("token_slayer")
+    hookinstall.install(p)
+    data = json.loads(p.settings_file.read_text())
+    stop_cmds = [h["command"] for e in data["hooks"]["Stop"] for h in e["hooks"]]
+    assert any(c == "/opt/venv/bin/slayer hook stop" for c in stop_cmds)
+    assert hookinstall.installed(p) is True

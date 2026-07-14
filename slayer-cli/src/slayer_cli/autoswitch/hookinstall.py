@@ -31,6 +31,19 @@ _SPECS: list[tuple[str, str, int]] = [
 _SIGNATURES: tuple[str, ...] = ("token-slayer ", "slayer ")
 
 
+def _hook_bin() -> str:
+    """The executable the installed hook command invokes.
+
+    Defaults to `token-slayer`. Set `TS_HOOK_BIN` to an absolute path when a
+    different `token-slayer` (e.g. the event-attribution shim) shadows this
+    CLI on PATH, so Claude Code's hooks reach THIS slayer-cli. The value must
+    still carry our signature (contain `slayer`) for by-signature detection.
+
+    :return: The command prefix the hook invokes (before ` hook <sub>`).
+    """
+    return os.environ.get("TS_HOOK_BIN") or "token-slayer"
+
+
 def _is_ours(entry: dict[str, Any]) -> bool:
     """Return whether a settings.json hook entry carries our signature.
 
@@ -95,7 +108,7 @@ def install(paths: Paths) -> None:
         entries = [e for e in hooks_by_event.get(event, []) if not _is_ours(e)]
         entries.append({
             "matcher": ".*",
-            "hooks": [{"type": "command", "command": f"token-slayer hook {sub}", "timeout": timeout}],
+            "hooks": [{"type": "command", "command": f"{_hook_bin()} hook {sub}", "timeout": timeout}],
         })
         hooks_by_event[event] = entries
     _save(paths, data)
@@ -133,7 +146,7 @@ def installed(paths: Paths) -> bool:
     data = _load(paths)
     hooks_by_event = data.get("hooks", {})
     for event, sub, _timeout in _SPECS:
-        expected = f"token-slayer hook {sub}"
+        expected = f"{_hook_bin()} hook {sub}"
         entries = hooks_by_event.get(event, [])
         if not any(
             any(expected in h.get("command", "") for h in e.get("hooks", []))
