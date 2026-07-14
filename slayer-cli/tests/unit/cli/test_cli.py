@@ -128,6 +128,22 @@ def test_remove_unknown_name_is_clean_error(tmp_path, monkeypatch):
     assert "Traceback" not in out.output
 
 
+def test_remove_the_active_slot_clears_the_active_pointer(tmp_path, monkeypatch):
+    """`remove <active-slot>` doesn't leave a dangling active pointer -- no
+    account stays marked active once its slot is gone."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    from slayer_cli.cli.main import main
+
+    store = AccountStore(Paths("token_slayer"))
+    store.add(Account(name="oedev", email="a@b.com", org_uuid="o1", plan=None,
+                       token="sk-ant-oat01-x", added_at=1))
+    store.set_active("oedev")
+
+    out = CliRunner().invoke(main, ["remove", "oedev"])
+    assert out.exit_code == 0
+    assert store.active() is None
+
+
 def test_list_empty_is_friendly(tmp_path, monkeypatch):
     """`list` with no slots prints a friendly message, not an empty table."""
     monkeypatch.setenv("HOME", str(tmp_path))

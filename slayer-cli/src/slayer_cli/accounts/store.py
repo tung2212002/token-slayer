@@ -102,6 +102,18 @@ class AccountStore:
         """
         return self._read_state().get("active_slot")
 
+    def clear_active(self) -> None:
+        """Unset the active slot in `state.json` (`active()` returns `None`
+        afterward). Used when the active slot is removed, so it doesn't
+        linger as a dangling pointer.
+
+        :return: None
+        """
+        state = self._read_state()
+        state.pop("active_slot", None)
+        state["updated_at"] = int(time.time())
+        self._write_state(state)
+
     def touch_last_used(self, name: str) -> None:
         """Set the slot's `last_used` to now and re-write it (`0600`).
 
