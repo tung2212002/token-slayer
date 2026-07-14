@@ -192,31 +192,37 @@ class SlayerApp(App):
     # -- refresh (`r`) ------------------------------------------------------
 
     def action_refresh(self) -> None:
-        """Clear the in-memory usage snapshots and re-fetch every account.
+        """Clear the in-memory usage snapshots and force a LIVE re-fetch of
+        every account (bypasses the usage cache TTL — a manual refresh should
+        fetch fresh data, not re-serve the cached snapshot).
 
         :return: None
         """
         self._snapshots = {}
         self._rebuild_table()
-        self._start_refresh()
+        self._start_refresh(force=True)
 
-    def _start_refresh(self) -> None:
+    def _start_refresh(self, force: bool = False) -> None:
         """Kick off one concurrent, thread-backed usage fetch per account
         so the UI never blocks on network I/O.
 
+        :param force: When True, each fetch bypasses the cache TTL and probes
+            live (used by the manual `r` refresh; the periodic refresh leaves
+            it False so it serves cached snapshots between live probes).
         :return: None
         """
         for account in self._accounts:
-            self.run_worker(lambda acc=account: self._fetch_one(acc), thread=True, exclusive=False)
+            self.run_worker(lambda acc=account: self._fetch_one(acc, force), thread=True, exclusive=False)
 
-    def _fetch_one(self, account: Account) -> None:
+    def _fetch_one(self, account: Account, force: bool = False) -> None:
         """Fetch `account`'s usage (blocking; runs in a worker thread) and
         hand the result back to the UI thread.
 
         :param account: Account slot to fetch quota for.
+        :param force: When True, bypass the cache TTL and probe live.
         :return: None
         """
-        snapshot = self._usage.get(account)
+        snapshot = self._usage.get(account, force=force)
         self.call_from_thread(self._on_usage_ready, account.name, snapshot)
 
     def _on_usage_ready(self, name: str, snapshot: UsageSnapshot) -> None:
