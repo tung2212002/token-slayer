@@ -12,7 +12,13 @@ use Illuminate\Support\Facades\DB;
 
 final class DamageTotals
 {
-    private const CACHE_KEY = 'damage-totals:global';
+    /**
+     * Cache key of the global damage-totals aggregate. Public so attribution
+     * backfill can invalidate it after re-attributing historical events.
+     *
+     * @var string
+     */
+    public const string CACHE_KEY = 'damage-totals:global';
 
     private const CACHE_TTL_SECONDS = 60;
 
