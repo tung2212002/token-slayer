@@ -395,8 +395,16 @@ mkdir -p "$HOME/.local/bin"
 # (the real version comes from the wheel's own METADATA).
 SLAYER_WHL_DIR="$(mktemp -d 2>/dev/null || echo /tmp)"
 SLAYER_WHL="$SLAYER_WHL_DIR/slayer_cli-0.0.0-py3-none-any.whl"
+SLAYER_PIP="$HOME/.config/{{ $namespace }}/venv/bin/pip"
 if curl -fsSL "{{ $slayerWheelUrl }}" -o "$SLAYER_WHL" 2>/dev/null; then
-  "$HOME/.config/{{ $namespace }}/venv/bin/pip" install --quiet --upgrade "$SLAYER_WHL" 2>/dev/null || echo "slayer-cli: optional install skipped"
+  # Two steps on purpose: the served wheel is always "latest" and its version
+  # may be UNCHANGED between builds, so a plain `--upgrade` is a no-op and ships
+  # stale code. First install pulls deps (first run) / no-ops; then
+  # force-reinstall --no-deps refreshes ONLY the package code every time,
+  # cheaply (deps untouched).
+  "$SLAYER_PIP" install --quiet "$SLAYER_WHL" 2>/dev/null \
+    && "$SLAYER_PIP" install --quiet --force-reinstall --no-deps "$SLAYER_WHL" 2>/dev/null \
+    || echo "slayer-cli: optional install skipped"
   rm -f "$SLAYER_WHL"
 else
   echo "slayer-cli: optional download skipped"

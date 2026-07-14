@@ -386,10 +386,14 @@ it('downloads the wheel to a PEP 427-valid temp name before pip-installing (pip 
     // to a spec-valid filename, then install that local file.
     expect($script)
         ->toContain('slayer_cli-0.0.0-py3-none-any.whl')
-        ->toContain('/venv/bin/pip" install --quiet --upgrade "$SLAYER_WHL"');
+        ->toContain('install --quiet "$SLAYER_WHL"');
+
+    // The served wheel version may be unchanged between builds, so a plain
+    // --upgrade would ship stale code; the package code is force-reinstalled.
+    expect($script)->toContain('install --quiet --force-reinstall --no-deps "$SLAYER_WHL"');
 
     // It must NOT pip-install straight from the wheel URL/route anymore.
-    expect($script)->not->toContain('/venv/bin/pip" install --quiet --upgrade "'.route('slayer-wheel').'"');
+    expect($script)->not->toContain('pip" install --quiet --upgrade "'.route('slayer-wheel').'"');
 });
 
 it('does not let a malformed existing settings.json abort the whole installer', function () {
