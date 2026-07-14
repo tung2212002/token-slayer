@@ -243,11 +243,11 @@ it('merges account_org_id into the outgoing event body when resolved', function 
     expect($mergeBlock)->toContain('account_org_id');
 });
 
-it('bumps the client version to 3 for the org-id beacon rollout', function () {
+it('bumps the client version to 4 for the multi-account attribution rollout', function () {
     $script = $this->get(route('install-script'))->content();
 
-    expect(config('token_slayer.client_version'))->toBe('3')
-        ->and($script)->toContain("CLIENT_VERSION='3'");
+    expect(config('token_slayer.client_version'))->toBe('4')
+        ->and($script)->toContain("CLIENT_VERSION='4'");
 });
 
 it('tips users toward custom.sh to customize what their fighter shows, at the end of a successful install', function () {
@@ -264,4 +264,83 @@ it('tips users toward custom.sh to customize what their fighter shows, at the en
     expect($tipPosition)->not->toBeFalse()
         ->and($lastHookInstallPosition)->not->toBeFalse()
         ->and($tipPosition)->toBeGreaterThan($lastHookInstallPosition);
+});
+
+it('sends an explicit User-Agent on every Anthropic curl call', function () {
+    $script = $this->get('/install')->getContent();
+
+    expect($script)->toContain("HOOK_UA='token-slayer-hook/");
+    // Both the beacon and the profile lookup must carry it.
+    expect(substr_count($script, '-A "$HOOK_UA"'))->toBeGreaterThanOrEqual(2);
+});
+
+it('retries a transient beacon error after a short self-heal window, not an hour', function () {
+    $script = $this->get('/install')->getContent();
+
+    expect($script)->toContain('BEACON_ERROR_RETRY_SECS=300');
+    expect($script)->toContain('-le "$BEACON_ERROR_RETRY_SECS"');
+    expect($script)->not->toContain('-le 3600');
+});
+
+it('forces bash for Claude Code hooks so Windows uses Git Bash deterministically', function () {
+    $script = $this->get('/install')->getContent();
+
+    // The Python merge appends the command dict with an explicit shell.
+    expect($script)->toContain('"type": "command", "command": cmd, "shell": "bash"');
+});
+
+it('consults an account identity provider before the beacon, by-session then active', function () {
+    $script = $this->get('/install')->getContent();
+
+    expect($script)->toContain('provider_account()');
+    expect($script)->toContain('CLAUDE_ACCOUNT_PROVIDER');
+    expect($script)->toContain('account-provider/sessions/$SESSION_ID.json');
+    expect($script)->toContain('account-provider/active.json');
+    expect($script)->toContain('ACC_SOURCE="provider"');
+
+    // provider runs before the credential beacon
+    expect(strpos($script, 'provider_account && return'))
+        ->toBeLessThan(strpos($script, 'OAUTH_TOKEN=$(current_access_token)'));
+
+    // session id is extracted from the payload before resolve_account runs
+    expect($script)->toContain('.session_id // .sessionId // ""');
+    expect(strpos($script, 'SESSION_ID=$(printf'))
+        ->toBeLessThan(strpos($script, "\n  resolve_account\n"));
+});
+
+it('bundles a detector-config and scans a proxy log by session id before giving up', function () {
+    $script = $this->get('/install')->getContent();
+
+    // Bundled config is written by the installer.
+    expect($script)->toContain('detector-config.json');
+    expect($script)->toContain('"teamclaude"');
+    expect($script)->toContain('"join": "session"');
+
+    // Generic scanner exists and runs inside the proxy branch, before NULL.
+    expect($script)->toContain('detector_scan()');
+    expect($script)->toContain('ACC_SOURCE="detector"');
+    expect(strpos($script, 'detector_scan && return'))
+        ->toBeLessThan(strpos($script, 'ACC_SOURCE="proxy"'));
+});
+
+it('attributes a ts_tokens window only when exactly one account served it', function () {
+    $script = $this->get('/install')->getContent();
+
+    expect($script)->toContain('DETECTOR_WINDOW_SECS=120');
+    // Distinct-account gate: 1 -> attribute, else NULL (the SAFE rule).
+    expect($script)->toContain('unique');
+    expect($script)->toContain('if length == 1');
+    // ts_tokens arm resolves to the detector source, not a guess.
+    expect(strpos($script, 'DETECTOR_WINDOW_SECS'))
+        ->toBeGreaterThan(strpos($script, 'detector_scan()'));
+});
+
+it('reserves the exclude-check hook point between attribution and the POST', function () {
+    $script = $this->get('/install')->getContent();
+
+    expect($script)->toContain('exclude-check hook point (Phase 3)');
+
+    $marker = strpos($script, 'exclude-check hook point (Phase 3)');
+    expect($marker)->toBeGreaterThan(strpos($script, 'resolve_account'));
+    expect($marker)->toBeLessThan(strpos($script, 'curl -s --max-time 3 -X POST'));
 });
