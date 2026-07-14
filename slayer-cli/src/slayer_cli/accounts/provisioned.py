@@ -28,9 +28,13 @@ __all__ = ["pull_and_setup"]
 def _base_url() -> str:
     """Return the token-slayer server's base URL.
 
-    :return: `SLAYER_API_BASE` if set, otherwise the default install origin.
+    Real installs never set `SLAYER_API_BASE` (the install script doesn't
+    export it), so this default IS what every production `setup` call
+    hits. Only dev/staging work should ever override it.
+
+    :return: `SLAYER_API_BASE` if set, otherwise production.
     """
-    return os.environ.get("SLAYER_API_BASE") or "https://ts.tungot.dev"
+    return os.environ.get("SLAYER_API_BASE") or "https://token-slayer.ownego.com"
 
 
 def _status_error(exc: httpx.HTTPStatusError) -> ProvisioningError:
@@ -42,9 +46,9 @@ def _status_error(exc: httpx.HTTPStatusError) -> ProvisioningError:
     status = exc.response.status_code
     if status in (401, 403):
         return ProvisioningError(
-            "server rejected the hook token (HTTP {0}). The token for this "
-            "namespace is not registered on the server — try another install's "
-            "namespace, e.g. SLAYER_NS=token_slayer_stg.".format(status)
+            "server rejected the hook token (HTTP {0}). Your token may be for "
+            "a different token-slayer install — check with an admin, or "
+            "re-run the install command from your profile page.".format(status)
         )
     return ProvisioningError(f"server returned HTTP {status} for /api/provisioned")
 

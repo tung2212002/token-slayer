@@ -147,3 +147,17 @@ def test_pull_raises_when_attribution_does_not_reflect_the_setup_account(tmp_pat
     client = httpx.Client(base_url="https://ts.example", transport=httpx.MockTransport(handler))
     with pytest.raises(ProvisioningError):
         provisioned.pull_and_setup(p, "TOK", client=client)
+
+
+def test_base_url_defaults_to_production(monkeypatch):
+    """Without SLAYER_API_BASE set, real installs must hit PRODUCTION — not
+    staging. Every user's install script never sets this env var, so this
+    default IS what every real `token-slayer setup` call uses."""
+    monkeypatch.delenv("SLAYER_API_BASE", raising=False)
+    assert provisioned._base_url() == "https://token-slayer.ownego.com"
+
+
+def test_base_url_respects_explicit_override(monkeypatch):
+    """A dev/staging override still works when explicitly set."""
+    monkeypatch.setenv("SLAYER_API_BASE", "https://ts.tungot.dev")
+    assert provisioned._base_url() == "https://ts.tungot.dev"
