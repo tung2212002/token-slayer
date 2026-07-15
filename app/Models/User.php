@@ -11,6 +11,7 @@ use Filament\Panel;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Spatie\Permission\Traits\HasRoles;
@@ -85,6 +86,17 @@ class User extends Authenticatable implements FilamentUser
     public function trackedAccounts(): BelongsToMany
     {
         return $this->accounts()->wherePivot('status', MembershipStatus::Tracked->value);
+    }
+
+    /**
+     * Usage events this user has logged, across all accounts, in natural
+     * order. Callers that need newest-first order the query explicitly.
+     *
+     * @return HasMany<Event, $this>
+     */
+    public function events(): HasMany
+    {
+        return $this->hasMany(Event::class);
     }
 
     /**
