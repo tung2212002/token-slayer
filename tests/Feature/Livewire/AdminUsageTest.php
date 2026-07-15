@@ -4,6 +4,8 @@ use App\Models\Account;
 use App\Models\Event;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
 
 uses(RefreshDatabase::class);
 
@@ -15,6 +17,33 @@ test('non-admin users are forbidden from the admin usage page', function () {
     $this->actingAs(User::factory()->create());
 
     $this->get('/admin/usage')->assertForbidden();
+});
+
+test('a role without view_usage_analytics is forbidden from the admin usage page even with another permission', function () {
+    Permission::firstOrCreate(['name' => 'ViewAny:Account', 'guard_name' => 'web']);
+    Permission::firstOrCreate(['name' => 'view_usage_analytics', 'guard_name' => 'web']);
+    $role = Role::create(['name' => 'account_viewer', 'guard_name' => 'web']);
+    $role->givePermissionTo('ViewAny:Account');
+
+    $user = User::factory()->create();
+    $user->assignRole('account_viewer');
+
+    $this->actingAs($user)
+        ->get('/admin/usage')
+        ->assertForbidden();
+});
+
+test('a role with view_usage_analytics can view the admin usage page', function () {
+    Permission::firstOrCreate(['name' => 'view_usage_analytics', 'guard_name' => 'web']);
+    $role = Role::create(['name' => 'usage_viewer', 'guard_name' => 'web']);
+    $role->givePermissionTo('view_usage_analytics');
+
+    $user = User::factory()->create();
+    $user->assignRole('usage_viewer');
+
+    $this->actingAs($user)
+        ->get('/admin/usage')
+        ->assertOk();
 });
 
 test('admin users can view the admin usage page', function () {

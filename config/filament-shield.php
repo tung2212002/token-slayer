@@ -27,7 +27,7 @@ return [
             'pages' => true,
             'widgets' => true,
             'resources' => true,
-            'custom_permissions' => false,
+            'custom_permissions' => true,
         ],
     ],
 
@@ -87,7 +87,7 @@ return [
     */
 
     'panel_user' => [
-        'enabled' => true,
+        'enabled' => false,
         'name' => 'panel_user',
     ],
 
