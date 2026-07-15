@@ -8,6 +8,9 @@ use App\Filament\Resources\Accounts\Pages\CreateAccount;
 use App\Filament\Resources\Accounts\Pages\EditAccount;
 use App\Filament\Resources\Accounts\Pages\ListAccounts;
 use App\Filament\Resources\Accounts\Pages\ViewAccount;
+use App\Filament\Resources\Accounts\RelationManagers\EventsRelationManager;
+use App\Filament\Resources\Accounts\RelationManagers\ProvisionsRelationManager;
+use App\Filament\Resources\Accounts\RelationManagers\UntrackedContributorsRelationManager;
 use App\Filament\Resources\Accounts\RelationManagers\UsersRelationManager;
 use App\Models\Account;
 use App\Services\AccountConnectService;
@@ -113,8 +116,8 @@ class AccountResource extends Resource
                 TextColumn::make('plan')
                     ->badge()
                     ->color('gray'),
-                TextColumn::make('users_count')
-                    ->counts('users')
+                TextColumn::make('tracked_users_count')
+                    ->counts('trackedUsers')
                     ->label('Members')
                     ->sortable(),
                 TextColumn::make('status')
@@ -204,7 +207,7 @@ class AccountResource extends Resource
                         ->danger()
                         ->title('Connect failed')
                         ->body(match ($exception->reason) {
-                            'connect_identity_mismatch' => 'The Claude account you authorized does not match this account.',
+                            'connect_identity_mismatch' => $exception->getMessage(),
                             'connect_state_expired' => 'This connect link expired or was already used. Click Connect to start again.',
                             'connect_no_identity' => 'Could not read an email from the authorized Claude account.',
                             default => 'Something went wrong completing the connect.',
@@ -321,6 +324,9 @@ class AccountResource extends Resource
     {
         return [
             UsersRelationManager::class,
+            UntrackedContributorsRelationManager::class,
+            ProvisionsRelationManager::class,
+            EventsRelationManager::class,
         ];
     }
 
