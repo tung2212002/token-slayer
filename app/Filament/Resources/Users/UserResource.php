@@ -85,7 +85,9 @@ class UserResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
-            ->modifyQueryUsing(fn (Builder $query): Builder => $query->withSum('events as total_tokens', 'tokens'))
+            ->modifyQueryUsing(fn (Builder $query): Builder => $query
+                ->withSum('events as total_tokens', 'tokens')
+                ->withSum(['events as account_tokens' => fn (Builder $q): Builder => $q->whereNotNull('account_id')], 'tokens'))
             ->columns([
                 ImageColumn::make('avatar_url')
                     ->label('')
@@ -103,6 +105,11 @@ class UserResource extends Resource
                     ->default('—'),
                 TextColumn::make('total_tokens')
                     ->label('Total tokens')
+                    ->numeric()
+                    ->sortable()
+                    ->default(0),
+                TextColumn::make('account_tokens')
+                    ->label('Company account usage')
                     ->numeric()
                     ->sortable()
                     ->default(0),
