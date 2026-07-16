@@ -3,6 +3,7 @@
 namespace App\Providers\Filament;
 
 use App\Filament\Auth\BattlefieldLogoutResponse;
+use App\Filament\Resources\Shield\RoleResource;
 use App\Filament\Widgets\ActivityHeatmap;
 use App\Filament\Widgets\FleetQuotaOverview;
 use App\Filament\Widgets\TokenVolumeChart;
@@ -69,6 +70,9 @@ class AdminPanelProvider extends PanelProvider
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\Filament\Pages')
             ->pages([
                 Dashboard::class,
+            ])
+            ->resources([
+                RoleResource::class,
             ])
             ->widgets([
                 AccountWidget::class,

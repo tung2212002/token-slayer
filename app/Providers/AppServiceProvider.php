@@ -3,12 +3,14 @@
 namespace App\Providers;
 
 use App\Models\User;
+use App\Observers\RoleObserver;
 use Filament\Support\Facades\FilamentTimezone;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 use SocialiteProviders\Manager\SocialiteWasCalled;
 use SocialiteProviders\Slack\Provider;
+use Spatie\Permission\Models\Role;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -35,5 +37,7 @@ class AppServiceProvider extends ServiceProvider
         });
 
         Gate::define('admin', fn (User $user): bool => $user->isAdministrator());
+
+        Role::observe(RoleObserver::class);
     }
 }
