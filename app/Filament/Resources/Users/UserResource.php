@@ -15,7 +15,9 @@ use Filament\Resources\Pages\PageRegistration;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
+use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 
 /**
@@ -71,7 +73,10 @@ class UserResource extends Resource
     }
 
     /**
-     * Build the index table: identity, and the roles currently assigned.
+     * Build the index table: avatar+identity, all-time total tokens, a
+     * windowed "tokens in range" figure driven by the `range` filter, and the
+     * roles currently assigned. `total_tokens` and `tokens_in_range` are both
+     * `withSum` aggregate aliases computed on the query, not model attributes.
      *
      * @param  Table  $table  the table being configured by Filament
      * @return Table
@@ -79,9 +84,14 @@ class UserResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->modifyQueryUsing(fn ($query) => $query->withSum('events as total_tokens', 'tokens'))
             ->columns([
+                ImageColumn::make('avatar_url')
+                    ->label('')
+                    ->circular()
+                    ->defaultImageUrl(fn (): string => 'https://ui-avatars.com/api/?name=?'),
                 TextColumn::make('display_name')
-                    ->label('Name')
+                    ->label('User')
                     ->getStateUsing(fn (User $record): string => $record->displayHandle())
                     ->searchable(['name', 'display_name', 'slack_handle']),
                 TextColumn::make('email')
@@ -90,12 +100,50 @@ class UserResource extends Resource
                     ->label('Roles')
                     ->badge()
                     ->default('—'),
+                TextColumn::make('total_tokens')
+                    ->label('Total tokens')
+                    ->numeric()
+                    ->sortable()
+                    ->default(0),
+                TextColumn::make('tokens_in_range')
+                    ->label('Tokens (range)')
+                    ->numeric()
+                    ->default(0)
+                    ->state(fn (User $record): int => (int) ($record->tokens_in_range ?? 0)),
                 TextColumn::make('last_event_at')
                     ->label('Last active')
                     ->dateTime()
                     ->sortable(),
             ])
-            ->defaultSort('name');
+            ->filters([
+                SelectFilter::make('range')
+                    ->label('Tokens window')
+                    ->options(['1' => 'Today', '7' => 'Last 7 days', '30' => 'Last 30 days'])
+                    ->default('7')
+                    // A no-op `query()` closure only exists so `SelectFilter` sees a query
+                    // modification callback and skips its default behaviour of treating
+                    // `range` as a real column (`where('range', $value)`, which errors — there
+                    // is no such column). The real aggregate is added via `baseQuery()` below.
+                    ->query(fn ($query) => $query)
+                    // `baseQuery()` (not `query()`): Filament's HasFilters::applyFiltersToTableQuery
+                    // wraps `apply()`'s query in a nested `where(Closure)` for filter predicates.
+                    // `withAggregate()` (which `withSum` calls) mutates the query builder's SELECT
+                    // columns directly rather than via the merged `$eagerLoad` array, so an
+                    // aggregate added inside that nested closure never reaches the outer query.
+                    // `applyToBaseQuery()` runs unwrapped, so the aggregate lands correctly.
+                    ->baseQuery(function ($query, array $data) {
+                        $days = (int) ($data['value'] ?? 7);
+                        if ($days <= 0) {
+                            return $query;
+                        }
+
+                        return $query->withSum(
+                            ['events as tokens_in_range' => fn ($q) => $q->where('created_at', '>=', now()->subDays($days))],
+                            'tokens'
+                        );
+                    }),
+            ])
+            ->defaultSort('total_tokens', 'desc');
     }
 
     /**
