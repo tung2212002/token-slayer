@@ -2,6 +2,7 @@
 
 namespace App\Filament\Pages;
 
+use App\Filament\Widgets\AccountUsageBreakdown;
 use App\Filament\Widgets\ActivityHeatmap;
 use App\Filament\Widgets\FleetQuotaOverview;
 use App\Filament\Widgets\TokenVolumeChart;
@@ -107,6 +108,7 @@ class UsageAnalytics extends Page
     protected function getFooterWidgets(): array
     {
         return [
+            AccountUsageBreakdown::class,
             ActivityHeatmap::class,
             FleetQuotaOverview::class,
             TokenVolumeChart::class,
