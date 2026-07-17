@@ -82,14 +82,14 @@ it('refreshes by forgetting both membership caches', function () {
     expect(Cache::has(CacheKeys::untrackedContributors($account->id)))->toBeFalse();
 });
 
-it('adds a brand-new user directly as a tracked member', function () {
+it('adds a brand-new user directly as a tracked member when the provision toggle is off', function () {
     $admin = User::factory()->admin()->create();
     $account = Account::factory()->create();
     $newcomer = User::factory()->create();
 
     Livewire::actingAs($admin)
         ->test(MembersRelationManager::class, ['ownerRecord' => $account, 'pageClass' => EditAccount::class])
-        ->callTableAction('addMember', data: ['user_id' => $newcomer->id])
+        ->callTableAction('addMember', data: ['user_id' => $newcomer->id, 'provision' => false])
         ->assertNotified();
 
     expect($account->trackedUsers()->whereKey($newcomer->id)->exists())->toBeTrue();
@@ -105,7 +105,7 @@ it('promotes an existing untracked contributor via addMember without a duplicate
 
     Livewire::actingAs($admin)
         ->test(MembersRelationManager::class, ['ownerRecord' => $account, 'pageClass' => EditAccount::class])
-        ->callTableAction('addMember', data: ['user_id' => $contributor->id]);
+        ->callTableAction('addMember', data: ['user_id' => $contributor->id, 'provision' => false]);
 
     expect($account->trackedUsers()->whereKey($contributor->id)->exists())->toBeTrue();
     expect($account->untrackedUsers()->whereKey($contributor->id)->exists())->toBeFalse();
