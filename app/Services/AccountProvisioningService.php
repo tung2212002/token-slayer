@@ -7,10 +7,12 @@ use App\Exceptions\AccountConnectException;
 use App\Models\Account;
 use App\Models\AccountUser;
 use App\Models\User;
+use App\Support\CacheKeys;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Crypt;
+use Throwable;
 
 /**
  * Provisions a per-user OAuth grant. Durable, non-secret tracking (token_uuid
@@ -146,6 +148,53 @@ final class AccountProvisioningService
         }
 
         return $payloads;
+    }
+
+    /**
+     * Confirm the org accounts the CLI actually finished setting up, promoting
+     * each membership to {@see MembershipStatus::Tracked}. Unknown org uuids
+     * are skipped — this never creates an `Account` from client input — and
+     * a failure writing one org's pivot is swallowed so it can't 500 the rest
+     * of the batch. Additive only: orgs absent from `$orgUuids` are untouched,
+     * and nothing here is ever demoted, revoked, or deleted.
+     *
+     * Deliberately does NOT call {@see CacheKeys::forgetAccountMembership()}
+     * (owner decision): that 1 h aggregate cache only feeds the Events/Last-seen
+     * columns, the status badge reads `pivot.status` live, and the tab's
+     * Refresh action already clears it on demand.
+     *
+     * @param  User  $user  the hook-authenticated user confirming setup
+     * @param  array<int, string>  $orgUuids  organization uuids the CLI confirmed it set up
+     * @return int the number of memberships confirmed
+     */
+    public function confirmSetup(User $user, array $orgUuids): int
+    {
+        $confirmed = 0;
+
+        foreach ($orgUuids as $orgUuid) {
+            $account = Account::query()->where('organization_uuid', $orgUuid)->first();
+            if ($account === null) {
+                continue; // unknown org — never create an account from client input
+            }
+
+            try {
+                $account->users()->syncWithoutDetaching([
+                    $user->id => ['status' => MembershipStatus::Tracked->value],
+                ]);
+
+                $pivot = AccountUser::query()
+                    ->where('user_id', $user->id)->where('account_id', $account->id)->first();
+                if ($pivot !== null && $pivot->claimed_at === null) {
+                    $pivot->forceFill(['claimed_at' => Carbon::now()])->save();
+                }
+
+                $confirmed++;
+            } catch (Throwable) {
+                continue; // one bad org must not 500 the whole confirmation request
+            }
+        }
+
+        return $confirmed;
     }
 
     /**
