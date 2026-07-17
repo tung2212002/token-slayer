@@ -141,6 +141,31 @@ it('displays the cached event count and last-seen time for an untracked contribu
         ->assertTableColumnStateSet('last_seen', (string) $latest->created_at, $contributor);
 });
 
+it('renders the "Pending setup" badge for a pending member', function () {
+    $admin = User::factory()->admin()->create();
+    $account = Account::factory()->create();
+    $pending = User::factory()->create();
+    $account->users()->attach($pending, ['status' => MembershipStatus::Pending->value]);
+
+    Livewire::actingAs($admin)
+        ->test(MembersRelationManager::class, ['ownerRecord' => $account, 'pageClass' => EditAccount::class])
+        ->assertSee('Pending setup');
+});
+
+it('verifies a pending member, flipping their pivot status to tracked (not a status-filtered no-op)', function () {
+    $admin = User::factory()->admin()->create();
+    $account = Account::factory()->create();
+    $pending = User::factory()->create();
+    $account->users()->attach($pending, ['status' => MembershipStatus::Pending->value]);
+
+    Livewire::actingAs($admin)
+        ->test(MembersRelationManager::class, ['ownerRecord' => $account, 'pageClass' => EditAccount::class])
+        ->callTableAction('verify', $pending);
+
+    $pivot = $account->users()->whereKey($pending->id)->first()->pivot;
+    expect($pivot->status)->toBe(MembershipStatus::Tracked);
+});
+
 it('renders a member identity even when slack_handle is null', function () {
     $admin = User::factory()->admin()->create();
     $account = Account::factory()->create();

@@ -82,8 +82,16 @@ class MembersRelationManager extends RelationManager
                 TextColumn::make('pivot.status')
                     ->label('Status')
                     ->badge()
-                    ->formatStateUsing(fn (MembershipStatus $state): string => $state === MembershipStatus::Tracked ? 'Verified' : 'Chưa verify')
-                    ->color(fn (MembershipStatus $state): string => $state === MembershipStatus::Tracked ? 'success' : 'warning'),
+                    ->formatStateUsing(fn (MembershipStatus $state): string => match ($state) {
+                        MembershipStatus::Tracked => 'Verified',
+                        MembershipStatus::Pending => $state->getLabel(),
+                        MembershipStatus::Untracked => 'Chưa verify',
+                    })
+                    ->color(fn (MembershipStatus $state): string => match ($state) {
+                        MembershipStatus::Tracked => 'success',
+                        MembershipStatus::Pending => 'warning',
+                        MembershipStatus::Untracked => 'warning',
+                    }),
                 TextColumn::make('events')
                     ->label('Events')
                     ->state(fn (User $record): int => $aggregates[$record->id]['events'] ?? 0),
@@ -120,9 +128,13 @@ class MembersRelationManager extends RelationManager
     }
 
     /**
-     * Promote an untracked contributor to tracked ("verify"). Uses
-     * `untrackedUsers()->updateExistingPivot()` so the update's `wherePivot`
-     * matches the row's current (untracked) status.
+     * Promote an untracked or pending contributor to tracked ("verify").
+     * Uses `syncWithoutDetaching()` on the base, unfiltered `users()`
+     * relationship rather than a status-matched relation: a `pending` row
+     * sits in neither `trackedUsers()` nor `untrackedUsers()`, so
+     * `untrackedUsers()->updateExistingPivot()` would silently no-op for it
+     * (the `wherePivot('status', …)` never matches, so the UPDATE affects
+     * zero rows).
      *
      * @return Action
      */
@@ -131,12 +143,12 @@ class MembersRelationManager extends RelationManager
         return Action::make('verify')
             ->label('Verify (track)')
             ->icon(Heroicon::OutlinedCheckBadge)
-            ->visible(fn (User $record): bool => $record->pivot->status === MembershipStatus::Untracked)
+            ->visible(fn (User $record): bool => in_array($record->pivot->status, [MembershipStatus::Untracked, MembershipStatus::Pending], true))
             ->action(function (User $record): void {
                 /** @var Account $account */
                 $account = $this->getOwnerRecord();
-                $account->untrackedUsers()->updateExistingPivot($record->id, [
-                    'status' => MembershipStatus::Tracked->value,
+                $account->users()->syncWithoutDetaching([
+                    $record->id => ['status' => MembershipStatus::Tracked->value],
                 ]);
                 CacheKeys::forgetAccountMembership($account->id);
 
