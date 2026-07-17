@@ -153,10 +153,20 @@ final class AccountProvisioningService
     /**
      * Confirm the org accounts the CLI actually finished setting up, promoting
      * each membership to {@see MembershipStatus::Tracked}. Unknown org uuids
-     * are skipped — this never creates an `Account` from client input — and
-     * a failure writing one org's pivot is swallowed so it can't 500 the rest
-     * of the batch. Additive only: orgs absent from `$orgUuids` are untouched,
-     * and nothing here is ever demoted, revoked, or deleted.
+     * are skipped — this never creates an `Account` from client input.
+     *
+     * Security scope: an org is only promoted if the user already holds a
+     * provisioned pivot for it (`account_user.provisioned_at` set and
+     * `revoked_at` null) — see {@see Account::provisionedUsers()}. Without
+     * that check a hook-token holder could self-graft membership onto any
+     * org uuid it sends; an org the user was never provisioned for is
+     * skipped exactly like an unknown org (not created, not counted).
+     *
+     * A failure writing one org's pivot is reported and swallowed so it
+     * can't 500 the rest of the batch. Additive only: orgs absent from
+     * `$orgUuids` are untouched, and nothing here is ever demoted, revoked,
+     * or deleted. Incoming uuids are deduped so a repeated uuid can't
+     * double-count `confirmed`.
      *
      * Deliberately does NOT call {@see CacheKeys::forgetAccountMembership()}
      * (owner decision): that 1 h aggregate cache only feeds the Events/Last-seen
@@ -171,10 +181,18 @@ final class AccountProvisioningService
     {
         $confirmed = 0;
 
-        foreach ($orgUuids as $orgUuid) {
+        foreach (array_unique($orgUuids) as $orgUuid) {
             $account = Account::query()->where('organization_uuid', $orgUuid)->first();
             if ($account === null) {
                 continue; // unknown org — never create an account from client input
+            }
+
+            $isProvisionedForUser = $account->provisionedUsers()
+                ->wherePivot('user_id', $user->id)
+                ->wherePivotNull('revoked_at')
+                ->exists();
+            if (! $isProvisionedForUser) {
+                continue; // never self-graft a membership the user wasn't provisioned for
             }
 
             try {
@@ -189,7 +207,9 @@ final class AccountProvisioningService
                 }
 
                 $confirmed++;
-            } catch (Throwable) {
+            } catch (Throwable $e) {
+                report($e);
+
                 continue; // one bad org must not 500 the whole confirmation request
             }
         }
