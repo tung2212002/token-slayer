@@ -27,8 +27,8 @@ use Livewire\Component;
 
 /**
  * All contributors of an `Account` in one tab, regardless of membership
- * status. Tracked members show a "Verified" badge; untracked contributors a
- * "Chưa verify" badge and can be verified (promoted) in place; a tracked
+ * status. Tracked members show a "Verified" badge; untracked contributors an
+ * "Unverified" badge and can be verified (promoted) in place; a tracked
  * member can also be unverified (demoted) back to untracked. Replaces the
  * former separate `UsersRelationManager`/`UntrackedContributorsRelationManager`
  * tabs.
@@ -85,7 +85,7 @@ class MembersRelationManager extends RelationManager
                     ->formatStateUsing(fn (MembershipStatus $state): string => match ($state) {
                         MembershipStatus::Tracked => 'Verified',
                         MembershipStatus::Pending => $state->getLabel(),
-                        MembershipStatus::Untracked => 'Chưa verify',
+                        MembershipStatus::Untracked => 'Unverified',
                     })
                     ->color(fn (MembershipStatus $state): string => match ($state) {
                         MembershipStatus::Tracked => 'success',

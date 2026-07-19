@@ -26,7 +26,7 @@ it('lists tracked and untracked contributors with status and toggles them', func
         ->test(MembersRelationManager::class, ['ownerRecord' => $account, 'pageClass' => EditAccount::class])
         ->assertCanSeeTableRecords([$tracked, $untracked])
         ->assertSee('Verified')
-        ->assertSee('Chưa verify')
+        ->assertSee('Unverified')
         ->callTableAction('verify', $untracked);
 
     expect($account->trackedUsers()->whereKey($untracked->id)->exists())->toBeTrue();
