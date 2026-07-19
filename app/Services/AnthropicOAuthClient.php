@@ -103,6 +103,39 @@ class AnthropicOAuthClient
     }
 
     /**
+     * Send a minimal one-token inference to start (anchor) the account's
+     * rolling 5-hour usage window at call time. A 0-token usage/beacon call
+     * does not start a session, so this must be a genuine message — billed a
+     * single output token against the cheapest model.
+     *
+     * @param  string  $accessToken  a valid OAuth access token
+     * @return array<string, mixed> the decoded messages response
+     *
+     * @throws UsageProbeException when the request is rejected or fails
+     */
+    public function startSession(string $accessToken): array
+    {
+        try {
+            $response = $this->newRequest()
+                ->withToken($accessToken)
+                ->withHeaders([
+                    'anthropic-beta' => config('token_slayer.anthropic.beta_header'),
+                    'anthropic-version' => config('token_slayer.anthropic.version_header'),
+                ])
+                ->asJson()
+                ->post(config('token_slayer.anthropic.messages_endpoint'), [
+                    'model' => config('token_slayer.anthropic.session_anchor.model'),
+                    'max_tokens' => 1,
+                    'messages' => [['role' => 'user', 'content' => '.']],
+                ]);
+        } catch (ConnectionException $exception) {
+            throw new UsageProbeException('connection_failed', 'Unable to reach the Anthropic messages endpoint.', $exception);
+        }
+
+        return $this->decodeOrFail($response, tokenCall: false);
+    }
+
+    /**
      * POST a JSON-encoded grant body to the OAuth token endpoint and decode
      * the response, translating failures into a UsageProbeException.
      *

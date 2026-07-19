@@ -117,3 +117,35 @@ test('a 429 response throws UsageProbeException with reason rate_limited', funct
 
     $this->fail('Expected UsageProbeException was not thrown.');
 });
+
+test('startSession posts a minimal one-token message to anchor the 5h window', function () {
+    fakeAnthropic();
+
+    $this->client->startSession('an-access-token');
+
+    Http::assertSent(function (Request $request) {
+        return $request->url() === config('token_slayer.anthropic.messages_endpoint')
+            && $request->method() === 'POST'
+            && $request->hasHeader('Authorization', 'Bearer an-access-token')
+            && $request->hasHeader('anthropic-beta', config('token_slayer.anthropic.beta_header'))
+            && $request->hasHeader('anthropic-version', config('token_slayer.anthropic.version_header'))
+            && $request['model'] === config('token_slayer.anthropic.session_anchor.model')
+            && $request['max_tokens'] === 1
+            && is_array($request['messages'])
+            && $request['messages'][0]['role'] === 'user';
+    });
+});
+
+test('startSession surfaces a rejected token as UsageProbeException reason unauthorized', function () {
+    fakeAnthropic(['messages' => Http::response('', 403)]);
+
+    try {
+        $this->client->startSession('a-dead-token');
+    } catch (UsageProbeException $exception) {
+        expect($exception->reason)->toBe('unauthorized');
+
+        return;
+    }
+
+    $this->fail('Expected UsageProbeException was not thrown.');
+});

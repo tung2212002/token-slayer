@@ -5,7 +5,6 @@ use App\Events\AccountTokenRejected;
 use App\Models\Account;
 use App\Models\AccountUsageSnapshot;
 use App\Notifications\AccountTokenRejectedNotification;
-use App\Services\AnthropicOAuthClient;
 use App\Services\UsageProber;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
@@ -15,7 +14,7 @@ use Illuminate\Support\Facades\Notification;
 uses(RefreshDatabase::class);
 
 beforeEach(function () {
-    $this->prober = new UsageProber(new AnthropicOAuthClient);
+    $this->prober = app(UsageProber::class);
 });
 
 test('a disabled account is skipped without any HTTP call', function () {

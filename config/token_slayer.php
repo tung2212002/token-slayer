@@ -36,9 +36,28 @@ return [
         'token_endpoint' => 'https://platform.claude.com/v1/oauth/token',
         'usage_endpoint' => 'https://api.anthropic.com/api/oauth/usage',
         'profile_endpoint' => 'https://api.anthropic.com/api/oauth/profile',
+        'messages_endpoint' => 'https://api.anthropic.com/v1/messages',
+        'version_header' => '2023-06-01',
         'beta_header' => 'oauth-2025-04-20',
         'user_agent' => env('ANTHROPIC_USER_AGENT', 'claude-cli/2.1.206 (external, cli)'),
         'redirect_uri' => env('ANTHROPIC_OAUTH_REDIRECT_URI', 'https://platform.claude.com/oauth/code/callback'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Session anchoring
+    |--------------------------------------------------------------------------
+    |
+    | A minimal real inference (max_tokens 1) is sent to each account at fixed
+    | clock times so Anthropic's rolling 5-hour usage window starts then. A
+    | 0-token usage/beacon call does NOT start a session, so this must be a
+    | genuine (tiny) message. `model` is the cheapest valid model to bill the
+    | one token against.
+    |
+    */
+
+    'session_anchor' => [
+        'model' => env('TOKEN_SLAYER_SESSION_ANCHOR_MODEL', 'claude-haiku-4-5-20251001'),
     ],
 
     /*
