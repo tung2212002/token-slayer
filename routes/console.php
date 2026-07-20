@@ -31,6 +31,14 @@ Schedule::command('accounts:probe')
     ->everyFiveMinutes()
     ->withoutOverlapping();
 
+// Anchor each account's rolling 5h Anthropic window at fixed clock times
+// (03:45 and 08:45 UTC+7) with a one-token message. No retry/catch-up — a late
+// run would start the window off-schedule.
+Schedule::command('accounts:anchor-sessions')
+    ->twiceDailyAt(3, 8, 45)
+    ->timezone('Asia/Ho_Chi_Minh')
+    ->withoutOverlapping();
+
 Schedule::command('accounts:sync-profiles')
     ->daily()
     ->withoutOverlapping();

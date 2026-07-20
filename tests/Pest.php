@@ -64,7 +64,7 @@ function something()
  * Pass per-key overrides to simulate failures, e.g.
  * fakeAnthropic(['token' => Http::response('', 429)]).
  *
- * @param  array<string, Response>  $overrides  per-endpoint Http::response() overrides keyed by 'token'|'usage'|'profile'
+ * @param  array<string, Response>  $overrides  per-endpoint Http::response() overrides keyed by 'token'|'usage'|'profile'|'messages'
  * @return void
  */
 function fakeAnthropic(array $overrides = []): void
@@ -80,5 +80,6 @@ function fakeAnthropic(array $overrides = []): void
         config('token_slayer.anthropic.token_endpoint') => $overrides['token'] ?? Http::response($fixture('token'), 200, ['Content-Type' => 'application/json']),
         config('token_slayer.anthropic.usage_endpoint') => $overrides['usage'] ?? Http::response($fixture('usage'), 200, ['Content-Type' => 'application/json']),
         config('token_slayer.anthropic.profile_endpoint') => $overrides['profile'] ?? Http::response($fixture('profile'), 200, ['Content-Type' => 'application/json']),
+        config('token_slayer.anthropic.messages_endpoint') => $overrides['messages'] ?? Http::response(['id' => 'msg_fake', 'type' => 'message', 'role' => 'assistant', 'stop_reason' => 'max_tokens'], 200, ['Content-Type' => 'application/json']),
     ]);
 }
