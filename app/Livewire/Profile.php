@@ -78,6 +78,7 @@ class Profile extends Component
             'coworkInstallUrl' => route('cowork-install-script'),
             'userscriptUrl' => route('userscript'),
             'combinedCommand' => 'curl -fsSL '.route('install-script')." | {$envVar}={$tokenValue} sh",
+            'windowsCommand' => 'powershell -ExecutionPolicy ByPass -c "$env:'.$envVar."='{$tokenValue}'; irm ".route('install-script-ps1').' | iex"',
             'coworkCommand' => 'curl -fsSL '.route('cowork-install-script')." | {$envVar}={$tokenValue} sh",
             'tokenSaveCommand' => "mkdir -p ~/.config/{$namespace} && printf '%s' '{$tokenValue}' > {$tokenPath} && chmod 600 {$tokenPath}",
             'tokenPath' => $tokenPath,
