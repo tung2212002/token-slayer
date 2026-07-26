@@ -6,6 +6,7 @@ use App\Enums\MembershipStatus;
 use App\Exceptions\AccountConnectException;
 use App\Filament\Concerns\ConnectsAccounts;
 use App\Models\Account;
+use App\Models\AccountProvisionedGrant;
 use App\Models\User;
 use App\Services\AccountConnectService;
 use App\Services\AccountProvisioningService;
@@ -26,6 +27,7 @@ use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Support\Facades\DB;
 use Livewire\Component;
 
 /**
@@ -96,6 +98,9 @@ class MembersRelationManager extends RelationManager
                         MembershipStatus::Pending => 'warning',
                         MembershipStatus::Untracked => 'warning',
                     }),
+                TextColumn::make('devices')
+                    ->label('Devices')
+                    ->state(fn (User $record): string => AccountProvisionedGrant::deviceSummaryFor($this->getOwnerRecord()->getKey(), $record->id) ?? '—'),
                 TextColumn::make('events')
                     ->label('Events')
                     ->state(fn (User $record): int => $aggregates[$record->id]['events'] ?? 0),
@@ -282,9 +287,11 @@ class MembersRelationManager extends RelationManager
      * {@see addMemberAction()} via `replaceMountedAction()` when the toggle is
      * on. Resolved on demand by Filament's `{name}Action` method convention
      * (never rendered as its own button). Exchanges the pasted code via
-     * {@see AccountProvisioningService::provisionFromCode()} — which writes
-     * the pivot as `Tracked` with `token_uuid`/`provisioned_at` set — then
-     * downgrades the pivot status to `Pending` so a freshly-provisioned
+     * {@see AccountProvisioningService::provisionForDevice()}, granting a
+     * fresh placeholder device from
+     * {@see AccountProvisioningService::resolveProvisionTarget()} — which
+     * writes the grant's own `token_uuid`/`provisioned_at`, not the pivot —
+     * then upserts the membership pivot as `Pending` so a freshly-provisioned
      * member isn't counted as verified until they complete setup. Mirrors
      * {@see ConnectsAccounts::connectAccountAction()}.
      *
@@ -315,14 +322,16 @@ class MembersRelationManager extends RelationManager
                 /** @var Account $account */
                 $account = $this->getOwnerRecord();
                 $user = User::query()->findOrFail($arguments['userId']);
+                $service = app(AccountProvisioningService::class);
 
                 try {
-                    $pivot = app(AccountProvisioningService::class)->provisionFromCode(
-                        $user,
-                        $account,
-                        $data['state'],
-                        $data['code'],
-                    );
+                    // Wrapped so a throw from provisionForDevice() (bad/expired
+                    // code) rolls back the device insert too — otherwise a
+                    // failed paste leaves an orphan placeholder device behind.
+                    DB::transaction(function () use ($service, $user, $account, $data): void {
+                        $device = $service->resolveProvisionTarget($user, null);
+                        $service->provisionForDevice($user, $account, $device, $data['state'], $data['code']);
+                    });
                 } catch (AccountConnectException $exception) {
                     Notification::make()
                         ->danger()
@@ -337,7 +346,9 @@ class MembersRelationManager extends RelationManager
                     return;
                 }
 
-                $pivot->forceFill(['status' => MembershipStatus::Pending->value])->save();
+                $account->users()->syncWithoutDetaching([
+                    $user->id => ['status' => MembershipStatus::Pending->value],
+                ]);
                 CacheKeys::forgetAccountMembership($account->id);
 
                 Notification::make()

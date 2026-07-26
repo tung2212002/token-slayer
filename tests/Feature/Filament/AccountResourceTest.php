@@ -1,14 +1,18 @@
 <?php
 
+use App\Enums\AccountPlan;
 use App\Enums\AccountStatus;
 use App\Enums\MembershipStatus;
 use App\Filament\Resources\Accounts\Pages\CreateAccount;
 use App\Filament\Resources\Accounts\Pages\EditAccount;
 use App\Filament\Resources\Accounts\Pages\ListAccounts;
+use App\Filament\Resources\Accounts\Pages\ViewAccount;
 use App\Filament\Resources\Accounts\RelationManagers\MembersRelationManager;
 use App\Filament\Resources\Accounts\RelationManagers\ProvisionsRelationManager;
 use App\Models\Account;
+use App\Models\AccountProvisionedGrant;
 use App\Models\AccountUsageSnapshot;
+use App\Models\Device;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
@@ -24,23 +28,20 @@ it('no longer exposes the provisionForUser header action on the provisions tab',
         ->assertActionDoesNotExist('provisionForUser');
 });
 
-it('still lists provisioned users and can revoke one from the provisions tab', function () {
+it('still lists provisioned grants and can revoke one from the provisions tab', function () {
     $admin = User::factory()->admin()->create();
     $account = Account::factory()->create();
     $user = User::factory()->create();
-    $user->accounts()->attach($account, [
-        'status' => MembershipStatus::Pending->value,
-        'provisioned_at' => now(),
-    ]);
+    $device = Device::factory()->for($user)->create();
+    $grant = AccountProvisionedGrant::factory()->for($account)->for($device)->pending()->create();
 
     Livewire::actingAs($admin)
         ->test(ProvisionsRelationManager::class, ['ownerRecord' => $account, 'pageClass' => EditAccount::class])
-        ->assertCanSeeTableRecords([$user])
-        ->callTableAction('revoke', $user)
+        ->assertCanSeeTableRecords([$grant])
+        ->callTableAction('revoke', $grant)
         ->assertNotified();
 
-    $pivot = $account->provisionedUsers()->whereKey($user->id)->firstOrFail();
-    expect($pivot->pivot->revoked_at)->not->toBeNull();
+    expect($grant->fresh()->revoked_at)->not->toBeNull();
 });
 
 it('blocks non-admins from the panel', function () {
@@ -58,7 +59,7 @@ it('lets an admin create and list accounts', function () {
 
     Livewire::actingAs($admin)
         ->test(CreateAccount::class)
-        ->fillForm(['email' => 'new@ownego.com', 'plan' => 'max-20x'])
+        ->fillForm(['email' => 'new@ownego.com', 'plan' => AccountPlan::Max20x->value])
         ->call('create')
         ->assertHasNoFormErrors()
         ->assertNotified();
@@ -72,7 +73,7 @@ it('rejects a duplicate account email on create', function () {
 
     Livewire::actingAs($admin)
         ->test(CreateAccount::class)
-        ->fillForm(['email' => 'dupe@ownego.com', 'plan' => 'max-20x'])
+        ->fillForm(['email' => 'dupe@ownego.com', 'plan' => AccountPlan::Max20x->value])
         ->call('create')
         ->assertHasFormErrors(['email']);
 });
@@ -95,7 +96,7 @@ it('lets an admin set the organization uuid when creating an account', function 
 
     Livewire::actingAs($admin)
         ->test(CreateAccount::class)
-        ->fillForm(['email' => 'uuid-on-create@ownego.com', 'plan' => 'max-20x', 'organization_uuid' => 'org-12345'])
+        ->fillForm(['email' => 'uuid-on-create@ownego.com', 'plan' => AccountPlan::Max20x->value, 'organization_uuid' => 'org-12345'])
         ->call('create')
         ->assertHasNoFormErrors();
 
@@ -237,4 +238,23 @@ it('shows the latest usage utilization in the account table', function () {
         ->test(ListAccounts::class)
         ->assertTableColumnStateSet('latestUsageSnapshot.util_5h', 12, $account)
         ->assertTableColumnStateSet('latestUsageSnapshot.util_7d', 34, $account);
+});
+
+it('renders the plan label on the accounts table', function (): void {
+    Account::factory()->max5x()->create(['email' => 'maxuser@example.com']);
+    $admin = User::factory()->admin()->create();
+
+    Livewire::actingAs($admin)
+        ->test(ListAccounts::class)
+        ->assertSee('Max 5x');
+});
+
+it('renders the resolved plan and raw profile fields on the account infolist', function (): void {
+    $admin = User::factory()->admin()->create();
+    $account = Account::factory()->max5x()->create(['email' => 'maxuser@example.com']);
+
+    Livewire::actingAs($admin)
+        ->test(ViewAccount::class, ['record' => $account->getRouteKey()])
+        ->assertSee('Max 5x')
+        ->assertSee('default_claude_max_5x');
 });

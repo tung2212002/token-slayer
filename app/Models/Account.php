@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\AccountPlan;
 use App\Enums\AccountStatus;
 use App\Enums\MembershipStatus;
 use App\Support\CacheKeys;
@@ -87,18 +88,14 @@ class Account extends Model
     }
 
     /**
-     * Users who have had an OAuth grant provisioned for this account
-     * (`account_user.provisioned_at` set), regardless of claim/revoke state.
-     * Exposes the provisioning audit columns (`token_uuid`, `provisioned_at`,
-     * `claimed_at`, `revoked_at`) on the pivot for the provisions relation manager.
+     * Every provisioned grant issued for this account, across all users'
+     * devices and statuses.
      *
-     * @return BelongsToMany<User, $this>
+     * @return HasMany<AccountProvisionedGrant, $this>
      */
-    public function provisionedUsers(): BelongsToMany
+    public function provisionedGrants(): HasMany
     {
-        return $this->users()
-            ->withPivot(['token_uuid', 'provisioned_at', 'claimed_at', 'revoked_at'])
-            ->wherePivotNotNull('provisioned_at');
+        return $this->hasMany(AccountProvisionedGrant::class);
     }
 
     /**
@@ -167,6 +164,7 @@ class Account extends Model
     {
         return [
             'status' => AccountStatus::class,
+            'plan' => AccountPlan::class,
             'oauth_access_token' => 'encrypted',
             'oauth_refresh_token' => 'encrypted',
             'oauth_expires_at' => 'datetime',
