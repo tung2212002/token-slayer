@@ -2,6 +2,8 @@
 
 use App\Events\BossKilled;
 use App\Events\BossSpawned;
+use App\Events\FighterCharacterChanged;
+use App\Events\FighterChargeCleared;
 use App\Events\FighterCharging;
 use App\Events\FighterIdled;
 use App\Events\FighterJoined;
@@ -40,6 +42,8 @@ test('every battlefield event broadcasts now on the battlefield channel with a s
         'FighterCharging' => new FighterCharging($user),
         'FighterJoined' => new FighterJoined($user),
         'FighterIdled' => new FighterIdled($user),
+        'FighterChargeCleared' => new FighterChargeCleared($user),
+        'FighterCharacterChanged' => new FighterCharacterChanged($user),
         'FighterMoved' => new FighterMoved($user, 0.5, 0.7),
     ];
 
@@ -108,6 +112,35 @@ test('FighterCharging broadcasts character for the given boss', function () {
     ])->and($withoutBoss->broadcastWith()['character'])->toBe($user->characterForBoss(null));
 });
 
+test('FighterCharging carries the fighter saved position, so a synthetic client-side rejoin restores it', function () {
+    $user = User::factory()->create();
+    app(FighterPositionCache::class)->put($user->id, 0.42, 0.66);
+
+    $payload = (new FighterCharging($user, 'thinking…'))->broadcastWith();
+
+    expect($payload['position'])->toBe(['x' => 0.42, 'y' => 0.66]);
+});
+
+test('FighterCharging carries a null position for a fighter that never moved', function () {
+    $user = User::factory()->create();
+
+    $payload = (new FighterCharging($user, 'thinking…'))->broadcastWith();
+
+    expect($payload)->toHaveKey('position')
+        ->and($payload['position'])->toBeNull();
+});
+
+test('FighterChargeCleared broadcasts on the battlefield channel with expected payload', function () {
+    $user = User::factory()->create();
+    $event = new FighterChargeCleared($user);
+
+    expect($event->broadcastOn()[0]->name)->toBe('battlefield')
+        ->and($event->broadcastAs())->toBe('FighterChargeCleared')
+        ->and($event->broadcastWith())->toBe([
+            'user_id' => $user->id,
+        ]);
+});
+
 test('FighterMoved broadcasts on the battlefield channel with expected payload', function () {
     $user = User::factory()->create();
     $event = new FighterMoved($user, 0.35, 0.72);
@@ -119,5 +152,17 @@ test('FighterMoved broadcasts on the battlefield channel with expected payload',
             'user_id' => $user->id,
             'x' => 0.35,
             'y' => 0.72,
+        ]);
+});
+
+test('FighterCharacterChanged broadcasts on the battlefield channel with the user\'s current character', function () {
+    $user = User::factory()->create(['equipped_character' => 'archer']);
+    $event = new FighterCharacterChanged($user);
+
+    expect($event->broadcastOn()[0]->name)->toBe('battlefield')
+        ->and($event->broadcastAs())->toBe('FighterCharacterChanged')
+        ->and($event->broadcastWith())->toBe([
+            'user_id' => $user->id,
+            'character' => 'archer',
         ]);
 });

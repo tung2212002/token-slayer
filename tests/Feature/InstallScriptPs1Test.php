@@ -120,3 +120,51 @@ it('stamps an empty client version into install.ps1 when the release cannot be r
     // Fail-soft: an empty stamp still yields a runnable script.
     expect($script)->toContain("\$ClientVersion = ''");
 });
+
+it('pipes the event body into curl over stdin in the bundled hook, not as an argv argument', function () {
+    // The hook this installer writes is the one Windows actually runs, so it
+    // is the file where the argv codepage conversion corrupts every non-ASCII
+    // byte of the payload — see the matching test for the POSIX installer.
+    $script = $this->get(route('install-script-ps1'))->content();
+
+    expect($script)
+        ->toContain('printf \'%s\' "$BODY" | curl -s --max-time 3 -X POST "$URL"')
+        ->toContain('--data-binary @-')
+        ->not->toContain('-d "$BODY"');
+});
+
+it('warns at the end of install.ps1 when Git Bash cannot find jq', function () {
+    // The hook runs under Git Bash, so jq must be on THAT PATH — checking
+    // PowerShell's own PATH would pass while the hook still records nothing.
+    $script = $this->get(route('install-script-ps1'))->content();
+
+    expect($script)
+        ->toContain('command -v jq')
+        ->toContain('winget install jqlang.jq')
+        ->toContain('usage tracking will record nothing');
+});
+
+it('bakes SLAYER_INSTALL_URL and SLAYER_NS into the Windows .cmd shims', function () {
+    // The POSIX shim execs through `env SLAYER_NS=… SLAYER_INSTALL_URL=…`;
+    // without the same on Windows `token-slayer update` aborts with
+    // "SLAYER_INSTALL_URL is not set" and the hook is never refreshed.
+    $script = $this->get(route('install-script-ps1'))->content();
+
+    expect($script)
+        ->toContain('SLAYER_NS=$Ns')
+        ->toContain('SLAYER_INSTALL_URL=$InstallUrl')
+        ->toContain('setlocal')
+        ->toContain('-m slayer_cli %*');
+});
+
+it('falls back to WindowsApps interpreters instead of rejecting them by path', function () {
+    // %LOCALAPPDATA%\Microsoft\WindowsApps holds BOTH the Store stub and the
+    // working shims of the Python Install Manager, so path alone cannot tell
+    // them apart — only the probe can. Real installs are still preferred.
+    $script = $this->get(route('install-script-ps1'))->content();
+
+    expect($script)
+        ->toContain('foreach ($allowStoreAlias in @($false, $true))')
+        ->toContain('WindowsApps')
+        ->not->toContain("if (\$path -and \$path -match 'WindowsApps') { continue }");
+});

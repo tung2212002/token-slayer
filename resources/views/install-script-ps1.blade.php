@@ -49,12 +49,21 @@ function Find-Python {
   $cands = @()
   if ($env:SLAYER_PYTHON) { $cands += $env:SLAYER_PYTHON }
   $cands += @('py -3', 'py -3.13', 'py -3.12', 'py -3.11', 'py -3.10', 'python', 'python3')
+  # Two passes. %LOCALAPPDATA%\Microsoft\WindowsApps holds BOTH the Store stub
+  # that only offers to install Python AND the working shims of the Python
+  # Install Manager (real interpreter under \AppData\Local\Python\pythoncore-*),
+  # so the path cannot tell them apart -- only the probe below can. A real
+  # install elsewhere is still preferred, hence store aliases come second.
+  # The stub only opens the Store when run with NO arguments; the probe always
+  # passes -c, so it just exits non-zero and falls through.
+  foreach ($allowStoreAlias in @($false, $true)) {
   foreach ($c in $cands) {
     $exe, $arg = ($c -split ' ',2)
     $resolved = (Get-Command $exe -ErrorAction SilentlyContinue)
     if (-not $resolved) { continue }
     $path = $resolved.Source
-    if ($path -and $path -match 'WindowsApps') { continue }   # MS Store stub -> opens Store
+    $isStoreAlias = [bool]($path -and $path -match 'WindowsApps')
+    if ($isStoreAlias -ne $allowStoreAlias) { continue }
     # Build the probe's argument list explicitly rather than passing $arg
     # directly -- $arg is $null for the bare `python`/`python3` candidates,
     # and passing $null as a native-command argument is version-dependent in
@@ -70,6 +79,7 @@ function Find-Python {
         return ,@($exe, $arg)
       }
     }
+  }
   }
   throw "No usable Python >= 3.10 with a working venv and pyexpat was found. Install from https://www.python.org/downloads/ or 'winget install Python.Python.3.12', then re-run -- or set SLAYER_PYTHON to a specific interpreter.`n(If 'python' opens the Microsoft Store, disable the App Execution Alias or install real Python.)"
 }
@@ -173,7 +183,18 @@ if (-not (Test-Path (Join-Path $Venv 'Scripts\pip.exe'))) {
 
 # --- Shims (3 .cmd, absolute venv path) -------------------------------------
 # Absolute $VenvPy avoids %~dp0 layout coupling.
-$shim = "@echo off`r`n`"$VenvPy`" -m slayer_cli %*`r`n"
+# The two env vars mirror what the POSIX shim execs through: without
+# SLAYER_INSTALL_URL, `token-slayer update` aborts before re-running the
+# installer, so the hook can never be refreshed on Windows. `setlocal` keeps
+# both inside this cmd process instead of leaking into the machine.
+# CRLF throughout: cmd.exe is not reliable on LF-only batch files.
+$shim = (@(
+  '@echo off',
+  'setlocal',
+  "set `"SLAYER_NS=$Ns`"",
+  "set `"SLAYER_INSTALL_URL=$InstallUrl`"",
+  "`"$VenvPy`" -m slayer_cli %*"
+) -join "`r`n") + "`r`n"
 foreach ($n in 'tok','slayer','token-slayer') {
   Set-Content -Path (Join-Path $Bin "$n.cmd") -Value $shim -Encoding Ascii -NoNewline
 }
@@ -534,10 +555,15 @@ CUSTOM_SH="$HOME/.config/__TS_NAMESPACE__/custom.sh"
 # their own private accounts here (exit 0 before POST) so those events never
 # leave the machine. Not active yet -- default is track everything.
 
-curl -s --max-time 3 -X POST "$URL" \
+# The body goes over stdin, never as an argv argument: Git Bash hands argv to
+# the native curl.exe through a Win32 codepage conversion that mangles every
+# non-ASCII byte, and the server then drops the event with "Malformed UTF-8".
+# A single argument is also capped near 32 KB, well under a long assistant
+# message.
+printf '%s' "$BODY" | curl -s --max-time 3 -X POST "$URL" \
   -H "Authorization: Bearer $(cat "$TOKEN_FILE")" \
   -H 'Content-Type: application/json' \
-  -d "$BODY" >/dev/null 2>&1 &
+  --data-binary @- >/dev/null 2>&1 &
 '@
 $hookSh = $hookShTemplate.Replace('__TS_BASE_URL__', $BaseUrl).Replace('__TS_NAMESPACE__', $Ns).Replace('__TS_CLIENT_VERSION__', $ClientVersion)
 # LF line endings (not CRLF) -- this file is executed by bash.
@@ -812,6 +838,25 @@ Write-Host "installed Antigravity CLI hooks -> $AgyHooks"
 # --- Git for Windows check ---------------------------------------------------
 if (-not (Get-Command git -ErrorAction SilentlyContinue) -and -not (Get-Command bash -ErrorAction SilentlyContinue)) {
   Write-Warning 'Attribution hooks need Git for Windows (Git Bash) to run. The CLI works without it; install Git for Windows to enable usage tracking.'
+}
+
+# --- jq check ----------------------------------------------------------------
+# jq has to be on Git Bash's PATH, not PowerShell's -- the hook runs under bash,
+# so probing Get-Command jq here would pass while the hook still records
+# nothing. Without jq every hook answers 201 and no damage is ever recorded.
+$bashExe = (Get-Command bash -ErrorAction SilentlyContinue)
+if ($bashExe) {
+  # -c, not -lc: the hook runs as a non-login bash, and a login shell sources
+  # /etc/profile into a wider PATH that would hide a jq the hook cannot see.
+  $jqFound = & $bashExe.Source -c 'command -v jq >/dev/null 2>&1 && echo yes' 2>$null
+  if ($jqFound -notcontains 'yes') {
+    Write-Host ""
+    Write-Host "=========================================================="
+    Write-Warning 'jq is NOT available to Git Bash -- usage tracking will record nothing. Hooks keep answering 201 and your fighter stays silent: no damage, no account attribution, no error.'
+    Write-Host "Install it, then open a new terminal:"
+    Write-Host "  winget install jqlang.jq"
+    Write-Host "=========================================================="
+  }
 }
 
 # --- Register the machine's current Claude login as a base account slot ----
