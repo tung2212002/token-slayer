@@ -68,6 +68,17 @@ test('regenerate replaces the hook token', function () {
     expect($user->fresh()->hook_token)->not->toBe($original);
 });
 
+test('regenerate token button is gated behind a confirmation step', function () {
+    $this->actingAs(User::factory()->create());
+
+    $this->get('/profile')
+        ->assertOk()
+        ->assertSee('Regenerate token')
+        ->assertSee('confirmingRegenerate = true', escape: false)
+        ->assertSee('Yes, regenerate')
+        ->assertSee('Cancel');
+});
+
 test('profile shows the players own all-time, monthly, and daily damage totals', function () {
     $user = User::factory()->create();
     $other = User::factory()->create();
@@ -192,4 +203,17 @@ test('profile links to the setup wizard and the CLI guide', function () {
         ->assertOk()
         ->assertSee('href="'.route('setup').'"', escape: false)
         ->assertSee('href="'.route('guide').'"', escape: false);
+});
+
+test('profile does not double-wrap the account nav in its own width constraint', function () {
+    $this->actingAs(User::factory()->create());
+
+    $html = $this->get('/profile')->getContent();
+
+    $navPos = strpos($html, '<nav');
+    $wrapperPos = strpos($html, 'p-8 max-w-3xl mx-auto space-y-6');
+
+    expect($navPos)->not->toBeFalse()
+        ->and($wrapperPos)->not->toBeFalse()
+        ->and($navPos)->toBeLessThan($wrapperPos);
 });

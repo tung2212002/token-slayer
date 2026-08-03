@@ -60,7 +60,7 @@ test('cli track step 4 offers three token states', function () {
 
     $this->get('/setup')
         ->assertOk()
-        ->assertSee('token-slayer status')
+        ->assertSee('tok status')
         ->assertSee('cat ~/.config/token_slayer/token')
         ->assertSee('Get-Content $HOME\.config\token_slayer\token', escape: false);
 });
@@ -91,9 +91,17 @@ test('cli track verify step mentions the tok alias and links to the guide', func
 
     $this->get('/setup')
         ->assertOk()
-        ->assertSee('token-slayer status')
-        ->assertSee('alias ngắn')
+        ->assertSee('tok status')
         ->assertSee('href="'.route('guide').'"', escape: false);
+});
+
+test('cli track renders a back control on the platform step', function () {
+    $this->actingAs(User::factory()->create());
+
+    $this->get('/setup')
+        ->assertOk()
+        ->assertSeeInOrder(['Choose your platform', '← Back'])
+        ->assertSee('direction = -1', escape: false);
 });
 
 test('cli track offers the manual hook config fallback with all three provider snippets', function () {
@@ -112,7 +120,7 @@ test('cowork track offers macOS and Windows only, not Linux', function () {
     $this->get('/setup')
         ->assertOk()
         ->assertSeeInOrder(['macOS', 'Windows'])
-        ->assertSee('không gắn được account cụ thể');
+        ->assertSee("can't attribute it to a specific account", escape: false);
 });
 
 test('cowork track shows the attribution caveat', function () {
@@ -120,7 +128,7 @@ test('cowork track shows the attribution caveat', function () {
 
     $this->get('/setup')
         ->assertOk()
-        ->assertSee('không gắn được account cụ thể')
+        ->assertSee("can't attribute it to a specific account", escape: false)
         ->assertSee('5h/7d');
 });
 
@@ -141,4 +149,12 @@ test('claude chat track lists tampermonkey, the chrome flag, and the userscript 
         ->assertSee('Tampermonkey')
         ->assertSee('Allow user scripts')
         ->assertSee(route('userscript'));
+});
+
+test('claude chat track has a back button on both steps', function () {
+    $this->actingAs(User::factory()->create());
+
+    $this->get('/setup')
+        ->assertOk()
+        ->assertSeeInOrder(['Tampermonkey', '← Back']);
 });
