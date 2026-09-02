@@ -41,23 +41,53 @@ class IdeAccessToken extends Model
      */
     public static function issueOneTime(User $user, string $state, int $ttlSeconds): array
     {
-        return self::issue($user, 'one_time', [
+        return self::issueOneTimeOfKind('one_time', $user, $state, $ttlSeconds);
+    }
+
+    public static function consumeOneTime(string $plain, string $state): ?User
+    {
+        return self::consumeOneTimeOfKind('one_time', $plain, $state);
+    }
+
+    /**
+     * Same shape as issueOneTime(), for the CCRC hub login flow — kept on
+     * its own `kind` so a token minted for one flow can never be redeemed
+     * against the other's /api/*\/auth/exchange endpoint.
+     *
+     * @return array{0: string, 1: self}
+     */
+    public static function issueOneTimeCcrc(User $user, string $state, int $ttlSeconds): array
+    {
+        return self::issueOneTimeOfKind('one_time_ccrc', $user, $state, $ttlSeconds);
+    }
+
+    public static function consumeOneTimeCcrc(string $plain, string $state): ?User
+    {
+        return self::consumeOneTimeOfKind('one_time_ccrc', $plain, $state);
+    }
+
+    /**
+     * @return array{0: string, 1: self}
+     */
+    private static function issueOneTimeOfKind(string $kind, User $user, string $state, int $ttlSeconds): array
+    {
+        return self::issue($user, $kind, [
             'state_hash' => hash('sha256', $state),
             'expires_at' => now()->addSeconds($ttlSeconds),
         ]);
     }
 
-    public static function consumeOneTime(string $plain, string $state): ?User
+    private static function consumeOneTimeOfKind(string $kind, string $plain, string $state): ?User
     {
         $tokenHash = hash('sha256', $plain);
 
         $consumed = self::atomicConsume(
-            self::whereKind('one_time')
+            self::whereKind($kind)
                 ->where('token_hash', $tokenHash)
                 ->where('state_hash', hash('sha256', $state))
         );
 
-        return $consumed ? self::whereKindAndHash('one_time', $tokenHash)->first()?->user : null;
+        return $consumed ? self::whereKindAndHash($kind, $tokenHash)->first()?->user : null;
     }
 
     /**
@@ -86,6 +116,35 @@ class IdeAccessToken extends Model
         return self::whereKindAndHash('bearer', hash('sha256', $plain))
             ->whereNull('revoked_at')
             ->first();
+    }
+
+    /**
+     * @return array{0: string, 1: self}
+     */
+    public static function issueAdminBearer(User $user): array
+    {
+        return self::issue($user, 'admin_bearer');
+    }
+
+    /**
+     * Resolve an admin bearer token to its User, but ONLY when that user
+     * currently holds at least one role — a token minted while the holder
+     * was an admin stops authenticating the moment their role is revoked,
+     * not just at the Filament-panel-access layer.
+     */
+    public static function resolveAdminBearer(string $plain): ?User
+    {
+        $token = self::whereKindAndHash('admin_bearer', hash('sha256', $plain))
+            ->whereNull('revoked_at')
+            ->first();
+
+        if ($token === null || ! $token->user->roles()->exists()) {
+            return null;
+        }
+
+        $token->forceFill(['last_used_at' => now()])->save();
+
+        return $token->user;
     }
 
     /**

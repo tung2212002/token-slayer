@@ -62,6 +62,16 @@
                     </svg>
                     Loadout
                 </button>
+            @else
+                <a
+                    href="{{ route('slack.login') }}"
+                    class="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-black/50 px-3 py-1.5 text-xs font-medium text-slate-400 backdrop-blur-sm transition-colors hover:border-amber-500/40 hover:text-amber-300"
+                >
+                    <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Loadout
+                </a>
             @endauth
         </nav>
 
@@ -303,16 +313,16 @@
                     this.$el.style.transform = `scale(${scale})`;
                 },
                 fmt(n) {
-                    // Mirror the boss HP formatter (resources/js/battlefield/format.js).
-                    const v = Math.max(0, Math.round(n));
-                    const trimZero = s => (s.includes('.') ? s.replace(/\.?0+$/, '') : s);
-                    if (v >= 999_500) {
-                        return trimZero((v / 1_000_000).toFixed(2)) + 'M';
-                    }
-                    if (v >= 1_000) {
-                        return trimZero((v / 1_000).toFixed(1)) + 'K';
-                    }
-                    return String(v);
+                    // Delegate to the boss HP formatter exposed on window.__battlefield
+                    // (resources/js/battlefield/format.js) so this never drifts from it.
+                    // Reads `this.ready` (set by tryWire() once window.__battlefield
+                    // exists) so Alpine re-evaluates this binding the moment the game
+                    // finishes booting — without it, init()'s synchronous first render
+                    // (before the game is ready) bakes in the plain-integer fallback
+                    // and nothing ever re-triggers it until the next live damage hit.
+                    return this.ready && window.__battlefield?.formatHp
+                        ? window.__battlefield.formatHp(n)
+                        : String(Math.max(0, Math.round(n)));
                 },
             };
         };

@@ -179,11 +179,11 @@ it('filters the payload to usage fields when SLAYER_MINIMAL_PAYLOAD is set, afte
     $script = $this->get(route('install-script'))->content();
 
     expect($script)
-        ->toContain('if [ "${SLAYER_MINIMAL_PAYLOAD:-}" = "1" ] && command -v jq >/dev/null 2>&1; then')
+        ->toContain('if [ "${SLAYER_MINIMAL_PAYLOAD:-}" = "1" ] && [ -x "$JQ" ]; then')
         ->toContain('case "$FILTERED" in \'{\'*) BODY="$FILTERED" ;; esac');
 
     $customShPosition = strpos($script, '[ -r "$CUSTOM_SH" ] && . "$CUSTOM_SH"');
-    $filterPosition = strpos($script, 'if [ "${SLAYER_MINIMAL_PAYLOAD:-}" = "1" ] && command -v jq');
+    $filterPosition = strpos($script, 'if [ "${SLAYER_MINIMAL_PAYLOAD:-}" = "1" ] && [ -x "$JQ" ]');
     $sendPosition = strpos($script, 'curl -s --max-time 3 -X POST "$URL"');
 
     expect($customShPosition)->toBeLessThan($filterPosition);
@@ -277,17 +277,21 @@ it('prunes old send-hook.sh backups to the newest 3', function () {
         ->toContain('ls -1t "$HOME/.config/token_slayer"/send-hook.sh.bak.* 2>/dev/null | tail -n +4 | xargs rm -f --');
 });
 
-it('skips account resolution entirely for non-Claude providers', function () {
+it('tries the account identity provider before skipping Claude-specific resolution for non-Claude providers', function () {
     $script = $this->get(route('install-script'))->content();
 
-    expect($script)->toContain('[ -n "${PROVIDER:-}" ]');
-
-    $guardPosition = strpos($script, '[ -n "${PROVIDER:-}" ]');
     $resolveDefinitionPosition = strpos($script, 'resolve_account() {');
+    $providerCallPosition = strpos($script, 'provider_account && return');
+    $guardPosition = strpos($script, '[ -n "${PROVIDER:-}" ] && return');
 
-    expect($guardPosition)->not->toBeFalse()
-        ->and($resolveDefinitionPosition)->not->toBeFalse()
-        ->and($guardPosition)->toBeGreaterThan($resolveDefinitionPosition);
+    expect($resolveDefinitionPosition)->not->toBeFalse()
+        ->and($providerCallPosition)->not->toBeFalse()
+        ->and($guardPosition)->not->toBeFalse()
+        // both live inside resolve_account()
+        ->and($providerCallPosition)->toBeGreaterThan($resolveDefinitionPosition)
+        ->and($guardPosition)->toBeGreaterThan($resolveDefinitionPosition)
+        // provider_account is tried FIRST -- this is the fix
+        ->and($providerCallPosition)->toBeLessThan($guardPosition);
 });
 
 it('sends an org-id beacon request that costs zero tokens and never touches quota', function () {
@@ -328,7 +332,7 @@ it('merges account_org_id into the outgoing event body when resolved', function 
 
     expect($script)->toContain('account_org_id');
 
-    $bodyAssignPosition = strpos($script, 'BODY=$(printf \'%s\' "$BODY" | jq -c --arg e "$ACC_EMAIL"');
+    $bodyAssignPosition = strpos($script, 'BODY=$(printf \'%s\' "$BODY" | "$JQ" -c --arg e "$ACC_EMAIL"');
     expect($bodyAssignPosition)->not->toBeFalse();
 
     $mergeBlock = substr($script, $bodyAssignPosition, 700);
@@ -414,6 +418,34 @@ it('consults an account identity provider before the beacon, by-session then act
     expect($script)->toContain('.session_id // .sessionId // ""');
     expect(strpos($script, 'SESSION_ID=$(printf'))
         ->toBeLessThan(strpos($script, "\n  resolve_account\n"));
+});
+
+it('reads the provider-scoped active file, generic account_id/user_id fields, before the legacy path', function () {
+    $script = $this->get(route('install-script'))->content();
+
+    expect($script)->toContain('account-provider/active-${PROVIDER:-claude}.json')
+        ->and($script)->toContain('.account_id // .org_uuid // ""')
+        ->and($script)->toContain('.user_id // .uuid // ""');
+});
+
+it('only falls back to the legacy shared active.json when PROVIDER is unset', function () {
+    $script = $this->get(route('install-script'))->content();
+
+    // the legacy fallback branch is gated on an empty PROVIDER, not
+    // unconditionally reachable -- this pins the guard so a future edit
+    // can't accidentally let a Codex-labeled event read Claude's file.
+    expect($script)->toContain('[ -z "${PROVIDER:-}" ]')
+        ->and($script)->toContain('account-provider/active.json');
+});
+
+it('still exposes ACC_ORG_ID and ACC_UUID for downstream attribution after the field rename', function () {
+    $script = $this->get(route('install-script'))->content();
+
+    // downstream code (the POST body builder) reads these two variable
+    // names -- the rename only touches the JSON field names being read
+    // INTO them, not the shell variable names themselves.
+    expect($script)->toContain('ACC_ORG_ID="$_org"')
+        ->and($script)->toContain('ACC_SOURCE="provider"');
 });
 
 it('bundles a detector-config and scans a proxy log by session id before giving up', function () {
@@ -562,14 +594,32 @@ it('downloads the wheel to a PEP 427-valid temp name before pip-installing (pip 
     // to a spec-valid filename, then install that local file.
     expect($script)
         ->toContain('slayer_cli-0.0.0-py3-none-any.whl')
-        ->toContain('install --quiet --break-system-packages "$SLAYER_WHL"');
+        ->toContain('install --quiet "$SLAYER_WHL"');
 
     // The served wheel version may be unchanged between builds, so a plain
     // --upgrade would ship stale code; the package code is force-reinstalled.
-    expect($script)->toContain('install --quiet --break-system-packages --force-reinstall --no-deps "$SLAYER_WHL"');
+    expect($script)->toContain('install --quiet --force-reinstall --no-deps "$SLAYER_WHL"');
 
     // It must NOT pip-install straight from the wheel URL/route anymore.
     expect($script)->not->toContain('pip" install --quiet --upgrade "'.route('slayer-wheel').'"');
+});
+
+it('does not pass --break-system-packages as a pip CLI flag to the wheel install (older pip lacks the option entirely)', function () {
+    $script = $this->get(route('install-script'))->content();
+
+    // pip < 23.0.1 has no --break-system-packages option at all and hard-fails
+    // with "no such option" if it's passed on the command line -- unlike an
+    // unrecognized env var, which old pip simply ignores. The exported
+    // PIP_BREAK_SYSTEM_PACKAGES=1 env var already covers the PEP 668 bypass
+    // for pip versions that understand it, so the wheel install commands must
+    // rely on that alone, not repeat the flag explicitly.
+    expect($script)->toContain('export PIP_BREAK_SYSTEM_PACKAGES=1');
+
+    $startPos = strpos($script, 'SLAYER_WHL_DIR="$(mktemp');
+    $endPos = strpos($script, 'rm -f "$SLAYER_WHL"');
+    expect($startPos)->not->toBeFalse()->and($endPos)->not->toBeFalse();
+    $installBlock = substr($script, $startPos, $endPos - $startPos);
+    expect($installBlock)->not->toContain('--break-system-packages');
 });
 
 it('does not let a malformed existing settings.json abort the whole installer', function () {
@@ -584,21 +634,70 @@ it('does not let a malformed existing settings.json abort the whole installer', 
         ->toContain('was invalid JSON');
 });
 
-it('falls back to the old update/status behavior when the venv is missing, and never blocks on a python failure', function () {
+it('stops the install immediately if the venv or wheel bootstrap fails, surfacing the real error', function () {
     $script = $this->get(route('install-script'))->content();
 
     expect($script)
-        ->toContain('already up to date')
+        ->toContain('already up to date')          // token-slayer CLI's own update/status subcommand, unrelated to install-time failure handling
         ->toContain('usage: token-slayer {update|status}')
-        ->toContain('fall back to the old minimal')       // the venv-missing fallback comment
-        ->toContain('hook tracking is still installed');  // wheel/venv steps never block the install
+        ->not->toContain('hook tracking is still installed')
+        ->not->toContain('CLI unavailable');
 
-    $execPosition = strpos($script, 'exec env SLAYER_NS');
-    $fallbackPosition = strpos($script, 'already up to date');
+    // Every venv/get-pip/wheel failure branch now exits instead of just logging.
+    foreach ([
+        "'python -m venv --without-pip' failed",
+        'could not download get-pip.py',
+        'get-pip bootstrap failed',
+        'wheel install failed',
+        'your token is missing or no longer valid',
+    ] as $failureMessage) {
+        $msgPos = strpos($script, $failureMessage);
+        expect($msgPos)->not->toBeFalse("expected to find failure message: $failureMessage");
+        $exitPos = strpos($script, 'exit 1', $msgPos);
+        expect($exitPos)->not->toBeFalse()
+            ->and($exitPos - $msgPos)->toBeLessThan(160);
+    }
+});
 
-    expect($execPosition)->not->toBeFalse()
-        ->and($fallbackPosition)->not->toBeFalse()
-        ->and($execPosition)->toBeLessThan($fallbackPosition);
+it('captures and prints the real curl/pip error instead of discarding it on failure', function () {
+    $script = $this->get(route('install-script'))->content();
+
+    expect($script)
+        ->toContain('2>"$SLAYER_CURL_ERR"')
+        ->toContain('cat "$SLAYER_CURL_ERR" >&2')
+        ->toContain('SLAYER_PIP_ERR=$("$SLAYER_PIP" install')
+        ->toContain('printf \'%s\n\' "$SLAYER_PIP_ERR" >&2');
+});
+
+it('checks curl\'s own exit status for the wheel download instead of pattern-matching a printed "000"', function () {
+    // `curl -w '%{http_code}' ... || echo "000"` is broken: curl writes SOMETHING
+    // to stdout via -w even on a hard transport failure (DNS/TLS/timeout), so the
+    // clean string "000" the old `elif` branch looked for never actually appears
+    // -- the real curl stderr was captured but never printed. Checking curl's own
+    // exit status directly (`if !`) is the only way to reliably detect that case.
+    $script = $this->get(route('install-script'))->content();
+
+    expect($script)
+        ->toContain('if ! SLAYER_HTTP=$(curl -sSL -w \'%{http_code}\'')
+        ->not->toContain('|| echo "000"')
+        ->toContain('could not reach the wheel download URL (see error above)');
+
+    // The failure branch that prints the captured curl stderr must be the `if !`
+    // guard around the curl call itself, not a separate "000" status check.
+    $ifNotPos = strpos($script, 'if ! SLAYER_HTTP=$(curl -sSL');
+    $catErrPos = strpos($script, 'cat "$SLAYER_CURL_ERR" >&2');
+    expect($ifNotPos)->not->toBeFalse()
+        ->and($catErrPos)->not->toBeFalse()
+        ->and($catErrPos)->toBeGreaterThan($ifNotPos)
+        ->and($catErrPos - $ifNotPos)->toBeLessThan(300);
+
+    // The http-status dispatch is a plain if/elif/else over 200/401/else --
+    // no more explicit "000" branch (that case is now handled above, by `if !`).
+    expect($script)
+        ->toContain('if [ "$SLAYER_HTTP" = "200" ]; then')
+        ->toContain('elif [ "$SLAYER_HTTP" = "401" ]; then')
+        ->not->toContain('elif [ "$SLAYER_HTTP" = "000" ]; then')
+        ->not->toContain('$SLAYER_HTTP" = "000"');
 });
 
 it('symlinks slayer to the token-slayer shim', function () {
@@ -611,19 +710,110 @@ it('symlinks slayer to the token-slayer shim', function () {
 // relays the wheel behind hook.token. That behavior is covered end-to-end in
 // tests/Feature/SlayerWheelTest.php.
 
-it('warns loudly at the end of the install when jq is missing, with an OS-specific install command', function () {
-    // Without jq the hook adds neither tokens nor client_version, so every
-    // event answers 201 and records nothing — silently, forever. macOS ships
-    // no jq at all, which is how a fresh Mac install ends up tracking zero.
+it('bootstraps a pinned jq binary instead of relying on the system jq', function () {
     $script = $this->get(route('install-script'))->content();
 
     expect($script)
-        ->toContain('if ! command -v jq >/dev/null 2>&1; then')
-        ->toContain('brew install jq')
-        ->toContain('apt install jq');
+        ->toContain('JQ_VERSION="1.8.2"')
+        ->toContain('JQ_DIR="$HOME/.config/token_slayer/bin"')
+        ->toContain('JQ_BIN="$JQ_DIR/jq"')
+        ->toContain('https://github.com/jqlang/jq/releases/download/jq-$JQ_VERSION/$JQ_ASSET')
+        ->toContain('jq-linux-amd64 b1c22172dd303f3be49e935aa56aa48a8b7a46e0bc838b4997d3bb451495870f')
+        ->toContain('jq-linux-arm64 8b85c817833814ddca00a144c33705546355afccf0cf39b188f3cdb48b852309')
+        ->toContain('jq-macos-amd64 e94b266e3c26690550006abe63152b782280f4e14374accdf04cbde844f00bc0')
+        ->toContain('jq-macos-arm64 2d75340ba57a4b4b4c8708a21c2dc8e958a48aaa8bba13b27f77f6e4c0eca07e');
 
-    $hookWritten = strpos($script, 'sha256 < "$HELPER" > "$CHECKSUM_FILE"');
-    $warning = strpos($script, 'if ! command -v jq >/dev/null 2>&1; then');
+    // Must run before the HOOK_SH heredoc is written, so a jq failure stops
+    // the install before any jq-dependent file is even created.
+    $jqBootstrapPos = strpos($script, 'JQ_VERSION="1.8.2"');
+    $hookWritePos = strpos($script, "cat > \"\$HELPER\" <<'HOOK_SH'");
+    expect($jqBootstrapPos)->not->toBeFalse()
+        ->and($hookWritePos)->not->toBeFalse()
+        ->and($jqBootstrapPos)->toBeLessThan($hookWritePos);
+});
 
-    expect($hookWritten)->toBeLessThan($warning);
+it('exits with a clear error when no pinned jq build exists for this platform/arch', function () {
+    $script = $this->get(route('install-script'))->content();
+
+    expect($script)->toContain('no pinned jq build for');
+
+    $noBuildPos = strpos($script, 'no pinned jq build for');
+    $exitPos = strpos($script, 'exit 1', $noBuildPos);
+    expect($exitPos)->not->toBeFalse()
+        ->and($exitPos - $noBuildPos)->toBeLessThan(200);
+});
+
+it('verifies the downloaded jq checksum before trusting it, and self-heals a mismatched existing binary', function () {
+    $script = $this->get(route('install-script'))->content();
+
+    expect($script)
+        ->toContain('CURRENT_SHA=$(sha256 < "$JQ_BIN")')
+        ->toContain('DOWNLOADED_SHA=$(sha256 < "$JQ_TMP")')
+        ->toContain('checksum mismatch')
+        ->toContain('chmod +x "$JQ_BIN"');
+});
+
+it('never falls back to a system jq inside the hook -- every jq call resolves to the bundled binary', function () {
+    $script = $this->get(route('install-script'))->content();
+
+    expect($script)
+        ->not->toContain('command -v jq')
+        ->toContain('JQ="$HOME/.config/token_slayer/bin/jq"');
+
+    // The resolver is declared before BODY is read and before the first jq
+    // call site (transcript token enrichment).
+    $resolverPos = strpos($script, 'JQ="$HOME/.config/token_slayer/bin/jq"');
+    $firstJqCallPos = strpos($script, '"$JQ" -r \'.transcript_path');
+    expect($resolverPos)->not->toBeFalse()
+        ->and($firstJqCallPos)->not->toBeFalse()
+        ->and($resolverPos)->toBeLessThan($firstJqCallPos);
+});
+
+it('uses the resolved $JQ variable in every call site inside the hook, including account resolution', function () {
+    $script = $this->get(route('install-script'))->content();
+
+    // Spot-check a representative call from each function that used to guard
+    // on `command -v jq` -- resolve_account, detector_scan, provider_account,
+    // and the final body-merge/minimal-payload filters.
+    expect($script)
+        ->toContain('"$JQ" -r \'.claudeAiOauth.accessToken')
+        ->toContain('"$JQ" -r \'.account_id // .org_uuid')
+        ->toContain('"$JQ" -r \'.email // ""\' "$NS_DIR/account.json"')
+        ->toContain('"$JQ" -r \'keys[]\'')
+        ->toContain('[ -x "$JQ" ]; then')
+        ->toContain('"$JQ" -c \'{');
+});
+
+it('guards jq calls with -x (executable check), not the always-true -n', function () {
+    // $JQ is always assigned a literal path string, so `[ -n "$JQ" ]` (non-empty
+    // string) is always true regardless of whether that file actually exists or
+    // is executable -- it provided none of the "defensive against a manually
+    // deleted binary" protection it was meant to. `-x` actually tests existence
+    // + executability. Three guards: transcript-enrichment, post-resolve_account
+    // body-merge, and the minimal-payload guard's `-x "$JQ"` half of the `&&`.
+    $script = $this->get(route('install-script'))->content();
+
+    expect($script)
+        ->not->toContain('[ -n "$JQ" ]')
+        ->toContain('[ -x "$JQ" ]; then')
+        ->toContain('[ "${SLAYER_MINIMAL_PAYLOAD:-}" = "1" ] && [ -x "$JQ" ]; then');
+
+    expect(substr_count($script, '-x "$JQ"'))->toBe(3);
+});
+
+it('a Codex-provider event can resolve identity via a provider-scoped active file, not just Claude events', function () {
+    $script = $this->get(route('install-script'))->content();
+
+    // The full call chain, in order, that makes this true: resolve_account
+    // tries provider_account first (Task 1); provider_account's file lookup
+    // is provider-scoped so it finds a Codex-written file even though
+    // PROVIDER=codex is set (Task 2) -- the OLD code's guard would have
+    // returned empty identity before ever reaching this lookup.
+    $resolveDefinitionPosition = strpos($script, 'resolve_account() {');
+    $providerCallPosition = strpos($script, 'provider_account && return');
+    $providerScopedLookup = strpos($script, 'account-provider/active-${PROVIDER:-claude}.json');
+
+    expect($providerCallPosition)->toBeGreaterThan($resolveDefinitionPosition)
+        ->and($providerScopedLookup)->not->toBeFalse()
+        ->and($script)->toContain('CODEX_CMD="PROVIDER=codex bash $HELPER"');
 });
