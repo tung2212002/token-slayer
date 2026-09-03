@@ -1,6 +1,6 @@
 {{--
     One quota gauge card. Expects $g = a QuotaGaugesQuery row:
-    ['email', 'plan', 'util_5h', 'util_7d', 'projected_5h', 'projected_7d',
+    ['provider', 'email', 'plan', 'util_5h', 'util_7d', 'projected_5h', 'projected_7d',
      'reset_5h_at', 'reset_7d_at', 'near_cap'].
     Optionally $members = a list of the account's contributors, each
     ['handle', 'avatar_url', 'status', 'tokens']; omitted (empty) on the
@@ -23,10 +23,13 @@
     $plan = $g['plan'] ?? null;
     $planColors = ['gray' => '#6b7280', 'info' => '#2563eb', 'warning' => '#d97706', 'success' => '#059669'];
     $planColor = $plan ? ($planColors[$plan->getColor()] ?? '#6b7280') : '#6b7280';
+    $provider = $g['provider'] ?? 'claude';
+    $providerColor = $provider === 'codex' ? '#059669' : '#6366f1';
 @endphp
 <div style="border-radius:.6rem; padding:.85rem 1rem; {{ $cardStyle }}">
     <div style="display:flex; align-items:center; justify-content:space-between; gap:.5rem;">
         <span style="display:inline-flex; align-items:center; gap:.4rem; min-width:0;">
+            <span style="font-size:.62rem; font-weight:700; letter-spacing:.03em; padding:.1rem .4rem; border-radius:.35rem; color:{{ $providerColor }}; background:{{ $providerColor }}1a; white-space:nowrap; text-transform:capitalize;">{{ $provider }}</span>
             <span style="font-weight:600; font-size:.875rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ $g['email'] }}</span>
             @if ($plan)
                 <span style="font-size:.62rem; font-weight:700; letter-spacing:.03em; padding:.1rem .4rem; border-radius:.35rem; color:{{ $planColor }}; background:{{ $planColor }}1a; white-space:nowrap;">{{ $plan->getLabel() }}</span>
