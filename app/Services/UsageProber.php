@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Exceptions\UsageProbeException;
 use App\Models\Account;
 use App\Models\AccountUsageSnapshot;
+use App\Services\Contracts\UsageProberContract;
 use Carbon\CarbonImmutable;
 
 /**
@@ -19,7 +20,7 @@ use Carbon\CarbonImmutable;
  * token-hygiene requirements, no raw token material is ever written to
  * `probe_error` or anywhere else.
  */
-class UsageProber
+class UsageProber implements UsageProberContract
 {
     /**
      * Build the prober with the OAuth client it fetches usage from and the

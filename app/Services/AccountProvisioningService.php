@@ -9,6 +9,7 @@ use App\Models\Account;
 use App\Models\AccountProvisionedGrant;
 use App\Models\Device;
 use App\Models\User;
+use App\Services\Contracts\GrantRevokerContract;
 use App\Services\Provisioning\DeviceClaimResolver;
 use App\Support\CacheKeys;
 use Illuminate\Support\Carbon;
@@ -22,7 +23,7 @@ use Throwable;
  * cache, encrypted, with a 24 h TTL — never at rest in the DB long-term, and
  * never on the account's own probe grant.
  */
-final class AccountProvisioningService
+final class AccountProvisioningService implements GrantRevokerContract
 {
     /**
      * Build the service with the connect flow and the device resolver.

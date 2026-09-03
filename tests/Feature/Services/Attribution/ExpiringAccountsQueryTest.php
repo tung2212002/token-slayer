@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\Provider;
 use App\Models\Account;
 use App\Models\ClaudeCredential;
 use App\Models\CodexCredential;
@@ -16,7 +17,7 @@ it('includes a claude account whose refresh token expires within 3 days', functi
 
     expect(collect($rows)->pluck('account_id'))->toContain($account->id);
     $row = collect($rows)->firstWhere('account_id', $account->id);
-    expect($row['provider'])->toBe('claude')
+    expect($row['provider'])->toBe(Provider::Claude)
         ->and($row['deadline'])->not->toBeNull();
 });
 
@@ -46,7 +47,7 @@ it('includes a codex account whose earliest_refresh_at has passed', function ():
     $row = collect($rows)->firstWhere('account_id', $account->id);
 
     expect($row)->not->toBeNull()
-        ->and($row['provider'])->toBe('codex')
+        ->and($row['provider'])->toBe(Provider::Codex)
         ->and($row['deadline'])->toBeNull();
 });
 

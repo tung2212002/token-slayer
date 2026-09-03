@@ -9,6 +9,7 @@ use App\Models\Account;
 use App\Services\Accounts\PlanResolver;
 use App\Services\Connect\ConnectDraft;
 use App\Services\Connect\ConnectResolution;
+use App\Services\Contracts\AccountDisconnecterContract;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
@@ -27,7 +28,7 @@ use Throwable;
  * Per token-hygiene requirements, raw token material is never logged,
  * exposed in exception messages, or written to `probe_error`.
  */
-class AccountConnectService
+class AccountConnectService implements AccountDisconnecterContract
 {
     /**
      * Cache key prefix for a pending connect attempt, keyed by `state`. The

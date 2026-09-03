@@ -4,6 +4,7 @@ use App\Enums\AccountPlan;
 use App\Enums\AccountStatus;
 use App\Enums\CodexPlan;
 use App\Enums\MembershipStatus;
+use App\Enums\Provider;
 use App\Filament\Resources\Accounts\Pages\CreateAccount;
 use App\Filament\Resources\Accounts\Pages\EditAccount;
 use App\Filament\Resources\Accounts\Pages\ListAccounts;
@@ -282,8 +283,8 @@ it('the index table renders a provider column with the correct value per row', f
 
     Livewire::actingAs($admin)
         ->test(ListAccounts::class)
-        ->assertTableColumnStateSet('provider', 'claude', record: $claude)
-        ->assertTableColumnStateSet('provider', 'codex', record: $codex);
+        ->assertTableColumnStateSet('provider', Provider::Claude, record: $claude)
+        ->assertTableColumnStateSet('provider', Provider::Codex, record: $codex);
 });
 
 it('the plan column renders the CodexPlan badge for a Codex row', function (): void {

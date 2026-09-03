@@ -62,7 +62,7 @@ test('the fleet quota card shows the provider badge after the email, not before'
 
     Livewire::test(FleetQuotaOverview::class)
         ->assertOk()
-        ->assertSeeInOrder(['ordered@example.com', 'claude']);
+        ->assertSeeInOrder(['ordered@example.com', 'Claude']);
 });
 
 test('the fleet quota overview lists each account contributor with all-time tokens', function () {

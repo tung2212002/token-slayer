@@ -6,6 +6,7 @@ use App\Enums\AccountStatus;
 use App\Exceptions\CodexConnectException;
 use App\Models\Account;
 use App\Services\Connect\CodexConnectPollResult;
+use App\Services\Contracts\AccountDisconnecterContract;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
@@ -20,7 +21,7 @@ use Illuminate\Support\Str;
  * codex-oauth-server-side-provisioning research note for the underlying
  * wire protocol this mirrors.
  */
-class CodexConnectService
+class CodexConnectService implements AccountDisconnecterContract
 {
     /**
      * Cache key prefix for a pending device-code attempt, keyed by `state`.

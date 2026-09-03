@@ -2,6 +2,7 @@
 
 use App\Enums\AccountPlan;
 use App\Enums\CodexPlan;
+use App\Enums\Provider;
 use App\Models\Account;
 use App\Models\CodexCredential;
 use App\Services\Analytics\QuotaGaugesQuery;
@@ -14,7 +15,7 @@ it('reports the provider and correct plan for a Claude account', function (): vo
 
     $row = collect(app(QuotaGaugesQuery::class)->get())->firstWhere('account_id', $account->id);
 
-    expect($row['provider'])->toBe('claude')
+    expect($row['provider'])->toBe(Provider::Claude)
         ->and($row['plan'])->toBe(AccountPlan::Max5x);
 });
 
@@ -24,6 +25,6 @@ it('reports the provider and correct CodexPlan for a Codex account, not the Clau
 
     $row = collect(app(QuotaGaugesQuery::class)->get())->firstWhere('account_id', $account->id);
 
-    expect($row['provider'])->toBe('codex')
+    expect($row['provider'])->toBe(Provider::Codex)
         ->and($row['plan'])->toBe(CodexPlan::Team);
 });

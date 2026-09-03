@@ -3,9 +3,8 @@
 namespace App\Services\Analytics;
 
 use App\Models\Account;
-use App\Services\CodexUsageProber;
 use App\Services\DamageTotals;
-use App\Services\UsageProber;
+use App\Services\ProviderServiceFactory;
 use Illuminate\Support\Facades\Cache;
 
 /**
@@ -13,22 +12,15 @@ use Illuminate\Support\Facades\Cache;
  * Fleet-quota widget's Refresh button) and busts the cached damage totals so
  * the analytics widgets recompute from the fresh snapshots. Each probe is
  * isolated: one account's failure never aborts the sweep. Fans out over both
- * providers — Claude via {@see UsageProber}, Codex via
- * {@see CodexUsageProber}.
+ * providers via {@see ProviderServiceFactory::proberFor()}.
  */
 final class FleetUsageRefresher
 {
     /**
-     * Build the refresher with the per-provider probers it fans out over.
-     *
-     * @param  UsageProber  $prober  the per-account Claude usage prober
-     * @param  CodexUsageProber  $codexProber  the per-account Codex usage prober
+     * @param  ProviderServiceFactory  $probers  resolves each account's provider-specific prober
      * @return void
      */
-    public function __construct(
-        private readonly UsageProber $prober,
-        private readonly CodexUsageProber $codexProber,
-    ) {}
+    public function __construct(private readonly ProviderServiceFactory $probers) {}
 
     /**
      * Probe every probeable account of either provider, forget the
@@ -42,9 +34,7 @@ final class FleetUsageRefresher
 
         foreach ($accounts as $account) {
             try {
-                $account->provider === 'codex'
-                    ? $this->codexProber->probe($account)
-                    : $this->prober->probe($account);
+                $this->probers->proberFor($account)->probe($account);
             } catch (\Throwable) {
                 // A single account's failure must not abort the fleet sweep;
                 // the prober already records a safe probe_error per account.
