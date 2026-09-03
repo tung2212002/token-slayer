@@ -3,6 +3,7 @@
 namespace App\Services\Analytics;
 
 use App\Enums\AccountPlan;
+use App\Enums\CodexPlan;
 use App\Models\Account;
 use App\Services\QuotaProjection;
 use Illuminate\Support\Carbon;
@@ -21,12 +22,12 @@ final class QuotaGaugesQuery
      * (`util_7d >= 85`). Accounts never probed report null utilization and
      * are not near-cap.
      *
-     * @return array<int, array{account_id:int, email:string, plan:AccountPlan, util_5h:?int, util_7d:?int, reset_5h_at:?Carbon, reset_7d_at:?Carbon, projected_5h:?int, projected_7d:?int, near_cap:bool}>
+     * @return array<int, array{account_id:int, provider:string, email:string, plan:AccountPlan|CodexPlan|null, util_5h:?int, util_7d:?int, reset_5h_at:?Carbon, reset_7d_at:?Carbon, projected_5h:?int, projected_7d:?int, near_cap:bool}>
      */
     public function get(): array
     {
         return Account::query()
-            ->with('latestUsageSnapshot')
+            ->with(['latestUsageSnapshot', 'codexCredential'])
             ->orderBy('email')
             ->get()
             ->map(function (Account $account): array {
@@ -34,8 +35,11 @@ final class QuotaGaugesQuery
 
                 return [
                     'account_id' => $account->id,
+                    'provider' => $account->provider,
                     'email' => $account->email,
-                    'plan' => $account->plan,
+                    'plan' => $account->provider === 'codex'
+                        ? CodexPlan::tryFrom($account->codexCredential?->plan_type ?? '')
+                        : $account->plan,
                     'util_5h' => $snapshot?->util_5h,
                     'util_7d' => $snapshot?->util_7d,
                     'reset_5h_at' => $snapshot?->reset_5h_at,
