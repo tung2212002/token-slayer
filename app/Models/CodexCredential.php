@@ -49,6 +49,7 @@ class CodexCredential extends Model
             'codex_expires_at' => 'datetime',
             'earliest_refresh_at' => 'datetime',
             'last_refreshed_at' => 'datetime',
+            'last_probed_at' => 'datetime',
         ];
     }
 }
