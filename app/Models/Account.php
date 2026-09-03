@@ -6,6 +6,7 @@ use App\Enums\AccountPlan;
 use App\Enums\AccountStatus;
 use App\Enums\MembershipStatus;
 use App\Models\Contracts\CredentialsProvider;
+use App\Services\CodexUsageProber;
 use App\Support\CacheKeys;
 use Database\Factories\AccountFactory;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -205,6 +206,27 @@ class Account extends Model
                 ->where('status', '!=', AccountStatus::Disabled->value)
                 ->where('status', '!=', AccountStatus::NeedsReauth->value)
                 ->whereNotNull('oauth_refresh_token');
+        });
+    }
+
+    /**
+     * Scope to Codex accounts the usage prober should attempt this cycle —
+     * the Codex counterpart to {@see scopeProbeable()}: not soft-disabled,
+     * not already known to need re-auth, and holding an access token to
+     * probe with in the first place (Codex has no separate refresh-token
+     * exchange for a usage probe, unlike Claude — see
+     * {@see CodexUsageProber}).
+     *
+     * @param  Builder<Account>  $query  the query being scoped
+     * @return Builder<Account> the scoped query
+     */
+    public function scopeCodexProbeable(Builder $query): Builder
+    {
+        return $query->whereHas('codexCredential', function (Builder $credentials): void {
+            $credentials
+                ->where('status', '!=', AccountStatus::Disabled->value)
+                ->where('status', '!=', AccountStatus::NeedsReauth->value)
+                ->whereNotNull('codex_access_token');
         });
     }
 
