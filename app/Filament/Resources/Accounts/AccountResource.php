@@ -212,10 +212,16 @@ class AccountResource extends Resource
                     ->badge(),
                 TextEntry::make('organization_type')
                     ->label('Org type')
-                    ->placeholder('—'),
+                    ->placeholder('—')
+                    ->visible(fn (Account $record): bool => $record->provider === 'claude'),
                 TextEntry::make('rate_limit_tier')
                     ->label('Rate limit tier')
-                    ->placeholder('—'),
+                    ->placeholder('—')
+                    ->visible(fn (Account $record): bool => $record->provider === 'claude'),
+                TextEntry::make('codexCredential.plan_type')
+                    ->label('Codex plan')
+                    ->placeholder('—')
+                    ->visible(fn (Account $record): bool => $record->provider === 'codex'),
                 TextEntry::make('status')
                     ->badge(),
                 TextEntry::make('last_probed_at')

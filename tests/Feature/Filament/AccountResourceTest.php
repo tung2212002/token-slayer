@@ -262,6 +262,17 @@ it('renders the resolved plan and raw profile fields on the account infolist', f
         ->assertSee('default_claude_max_5x');
 });
 
+it('shows the Codex plan_type instead of Claude org-type/rate-limit-tier on a Codex account infolist', function (): void {
+    $admin = User::factory()->admin()->create();
+    $account = Account::factory()->create(['provider' => 'codex']);
+    CodexCredential::factory()->for($account)->create(['plan_type' => 'pro']);
+
+    Livewire::actingAs($admin)
+        ->test(ViewAccount::class, ['record' => $account->getRouteKey()])
+        ->assertSee('pro')
+        ->assertDontSee('Rate limit tier');
+});
+
 it('the index table renders a provider column with the correct value per row', function (): void {
     $admin = User::factory()->admin()->create();
     $claude = Account::factory()->create(['provider' => 'claude', 'email' => 'claude@example.com']);
