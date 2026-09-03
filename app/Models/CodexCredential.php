@@ -3,9 +3,11 @@
 namespace App\Models;
 
 use App\Enums\AccountStatus;
+use App\Models\Contracts\CredentialsProvider;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
 
 /**
  * One Codex/ChatGPT shared account's persistent credential — populated by
@@ -14,7 +16,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * `CodexProvisioningService::provisionForDevice()`.
  */
 #[Hidden(['codex_access_token', 'codex_refresh_token'])]
-class CodexCredential extends Model
+class CodexCredential extends Model implements CredentialsProvider
 {
     protected $guarded = [];
 
@@ -51,5 +53,29 @@ class CodexCredential extends Model
             'last_refreshed_at' => 'datetime',
             'last_probed_at' => 'datetime',
         ];
+    }
+
+    /**
+     * @inheritDoc
+     */
+    public function credentialStatus(): AccountStatus
+    {
+        return $this->status;
+    }
+
+    /**
+     * @inheritDoc
+     */
+    public function credentialLastProbedAt(): ?Carbon
+    {
+        return $this->last_probed_at;
+    }
+
+    /**
+     * @inheritDoc
+     */
+    public function credentialProbeError(): ?string
+    {
+        return $this->probe_error;
     }
 }
