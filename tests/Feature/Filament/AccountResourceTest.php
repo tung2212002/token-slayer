@@ -270,7 +270,8 @@ it('shows the Codex plan_type instead of Claude org-type/rate-limit-tier on a Co
     Livewire::actingAs($admin)
         ->test(ViewAccount::class, ['record' => $account->getRouteKey()])
         ->assertSee('pro')
-        ->assertDontSee('Rate limit tier');
+        ->assertDontSee('Rate limit tier')
+        ->assertDontSee('Max 20x');
 });
 
 it('the index table renders a provider column with the correct value per row', function (): void {

@@ -210,7 +210,8 @@ class AccountResource extends Resource
                 TextEntry::make('name')
                     ->placeholder('—'),
                 TextEntry::make('plan')
-                    ->badge(),
+                    ->badge()
+                    ->visible(fn (Account $record): bool => $record->provider === 'claude'),
                 TextEntry::make('organization_type')
                     ->label('Org type')
                     ->placeholder('—')
