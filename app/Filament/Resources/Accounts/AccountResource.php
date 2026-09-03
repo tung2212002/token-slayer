@@ -76,7 +76,10 @@ class AccountResource extends Resource
                 TextInput::make('email')
                     ->email()
                     ->required()
-                    ->unique(ignoreRecord: true)
+                    ->unique(
+                        ignoreRecord: true,
+                        modifyRuleUsing: fn (Unique $rule): Unique => $rule->where('provider', 'claude'),
+                    )
                     ->maxLength(255)
                     ->disabledOn('edit'),
                 TextInput::make('organization_uuid')

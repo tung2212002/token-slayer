@@ -54,6 +54,16 @@ it('connects a new Codex account, decoding identity from id_token', function ():
         ->and($credential->last_refreshed_at->toIso8601String())->toBe('2026-01-01T00:00:00+00:00');
 });
 
+it('connects a Codex account whose email already belongs to an existing Claude account', function (): void {
+    Account::factory()->create(['provider' => 'claude', 'email' => 'shared@example.com']);
+
+    $account = app(CodexProvisioningService::class)->connectAccount(fakeCodexAuthJson(), 'Company ChatGPT');
+
+    expect($account->provider)->toBe('codex')
+        ->and($account->email)->toBe('shared@example.com')
+        ->and(Account::where('email', 'shared@example.com')->count())->toBe(2);
+});
+
 it('re-connecting the same chatgpt_account_id updates the existing account instead of duplicating it', function (): void {
     $service = app(CodexProvisioningService::class);
     $first = $service->connectAccount(fakeCodexAuthJson(), 'Company ChatGPT');
