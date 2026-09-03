@@ -4,7 +4,9 @@ namespace App\Models;
 
 use App\Enums\AccountStatus;
 use App\Models\Contracts\CredentialsProvider;
+use Database\Factories\CodexCredentialFactory;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
@@ -18,6 +20,9 @@ use Illuminate\Support\Carbon;
 #[Hidden(['codex_access_token', 'codex_refresh_token'])]
 class CodexCredential extends Model implements CredentialsProvider
 {
+    /** @use HasFactory<CodexCredentialFactory> */
+    use HasFactory;
+
     protected $guarded = [];
 
     /**
@@ -77,5 +82,13 @@ class CodexCredential extends Model implements CredentialsProvider
     public function credentialProbeError(): ?string
     {
         return $this->probe_error;
+    }
+
+    /**
+     * @return CodexCredentialFactory
+     */
+    protected static function newFactory(): CodexCredentialFactory
+    {
+        return CodexCredentialFactory::new();
     }
 }
