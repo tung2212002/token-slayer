@@ -295,14 +295,20 @@ it('the plan column renders the CodexPlan badge for a Codex row', function (): v
         ->assertTableColumnStateSet('plan', CodexPlan::Pro, record: $codex);
 });
 
-it('Refresh now is not shown on a Codex row (no CodexUsageProber exists yet)', function (): void {
+it('Refresh now on a Codex row calls CodexUsageProber, not the Claude UsageProber', function (): void {
     $admin = User::factory()->admin()->create();
     $codex = Account::factory()->create(['provider' => 'codex']);
-    CodexCredential::factory()->for($codex)->create();
+    CodexCredential::factory()->for($codex)->create(['codex_access_token' => 'fake-token']);
+    $fixture = json_decode(file_get_contents(base_path('tests/fixtures/codex/usage.json')), true);
+    Http::fake(['chatgpt.com/backend-api/wham/usage' => Http::response($fixture, 200)]);
 
     Livewire::actingAs($admin)
         ->test(ListAccounts::class)
-        ->assertTableActionHidden('refreshNow', $codex);
+        ->assertTableActionVisible('refreshNow', $codex)
+        ->callTableAction('refreshNow', $codex)
+        ->assertNotified();
+
+    expect($codex->fresh()->last_probed_at)->not->toBeNull();
 });
 
 it('Disconnect on a Codex row calls CodexConnectService, not AccountConnectService', function (): void {

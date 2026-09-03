@@ -18,6 +18,7 @@ use App\Models\ClaudeCredential;
 use App\Services\AccountConnectService;
 use App\Services\Accounts\PlanResolver;
 use App\Services\CodexConnectService;
+use App\Services\CodexUsageProber;
 use App\Services\UsageProber;
 use BackedEnum;
 use Filament\Actions\Action;
@@ -297,10 +298,8 @@ class AccountResource extends Resource
     /**
      * Build the "Refresh now" record action: runs the usage prober against the
      * account on demand and reports the fresh 5h/7d utilization, or the recorded
-     * probe error. Delegates all work to {@see UsageProber}. Claude-only — Codex
-     * has no usage-probing service yet (Codex's real rate-limit data is only
-     * obtainable over a live WebSocket turn, not a simple polled REST call;
-     * see the codex-oauth-server-side-provisioning research note).
+     * probe error. Delegates to {@see UsageProber} (Claude) or
+     * {@see CodexUsageProber} (Codex).
      *
      * @return Action
      */
@@ -309,9 +308,10 @@ class AccountResource extends Resource
         return Action::make('refreshNow')
             ->label('Refresh now')
             ->icon(Heroicon::OutlinedArrowPath)
-            ->visible(fn (Account $record): bool => $record->provider === 'claude')
             ->action(function (Account $record): void {
-                $snapshot = app(UsageProber::class)->probe($record);
+                $snapshot = $record->provider === 'codex'
+                    ? app(CodexUsageProber::class)->probe($record)
+                    : app(UsageProber::class)->probe($record);
 
                 if ($snapshot === null) {
                     Notification::make()
