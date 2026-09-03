@@ -5,11 +5,13 @@ namespace App\Services;
 use App\Enums\AccountStatus;
 use App\Enums\GrantStatus;
 use App\Enums\MembershipStatus;
+use App\Enums\Provider;
 use App\Exceptions\CodexConnectException;
 use App\Models\Account;
 use App\Models\AccountProvisionedGrant;
 use App\Models\CodexCredential;
 use App\Models\User;
+use App\Services\Contracts\GrantRevokerContract;
 use App\Support\CacheKeys;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
@@ -24,7 +26,7 @@ use Illuminate\Support\Facades\Crypt;
  * `claim()`/`removable()`/`confirmSetup()`/`memberships()` methods (those
  * stay Claude-only; see the spec's §7 correction for why).
  */
-final class CodexProvisioningService
+final class CodexProvisioningService implements GrantRevokerContract
 {
     /**
      * @param  AccountProvisioningService  $accounts  supplies provider-agnostic device resolution
@@ -59,7 +61,7 @@ final class CodexProvisioningService
         $account->fill([
             'name' => $name,
             'email' => $this->identity($authJson, 'email', namespaced: false),
-            'provider' => 'codex',
+            'provider' => Provider::Codex,
         ]);
         $account->save();
 

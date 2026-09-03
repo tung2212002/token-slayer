@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Admin;
 
+use App\Enums\Provider;
 use App\Exceptions\CodexConnectException;
 use App\Http\Controllers\Controller;
 use App\Models\Account;
@@ -60,7 +61,7 @@ class CodexAdminController extends Controller
             'auth_json' => ['required', 'array'],
         ]);
 
-        $account = Account::query()->where('provider', 'codex')->where('name', $data['account'])->first();
+        $account = Account::query()->where('provider', Provider::Codex)->where('name', $data['account'])->first();
         if ($account === null) {
             return response()->json(['error' => "no Codex account named '{$data['account']}'"], 404);
         }

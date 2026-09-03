@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Account;
 use App\Models\AccountUsageSnapshot;
+use App\Services\Contracts\UsageProberContract;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Carbon;
@@ -24,7 +25,7 @@ use Illuminate\Support\Facades\Http;
  * silent skip — a future Codex token-refresh command is out of scope for
  * this parity work.
  */
-class CodexUsageProber
+class CodexUsageProber implements UsageProberContract
 {
     /**
      * @var string

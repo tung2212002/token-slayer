@@ -2,6 +2,7 @@
 
 namespace App\Services\Attribution;
 
+use App\Enums\Provider;
 use App\Models\Account;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -28,7 +29,7 @@ final class ExpiringAccountsQuery
     private const int CODEX_STALENESS_DAYS = 8;
 
     /**
-     * @return array<int, array{account_id:int, email:?string, name:?string, provider:string, label:string, deadline:?Carbon}>
+     * @return array<int, array{account_id:int, email:?string, name:?string, provider:Provider, label:string, deadline:?Carbon}>
      */
     public function get(): array
     {
@@ -36,12 +37,12 @@ final class ExpiringAccountsQuery
     }
 
     /**
-     * @return Collection<int, array{account_id:int, email:?string, name:?string, provider:string, label:string, deadline:?Carbon}>
+     * @return Collection<int, array{account_id:int, email:?string, name:?string, provider:Provider, label:string, deadline:?Carbon}>
      */
     private function claudeRows(): Collection
     {
         return Account::query()
-            ->where('provider', 'claude')
+            ->where('provider', Provider::Claude)
             ->whereHas('claudeCredential', fn ($query) => $query
                 ->whereNotNull('oauth_refresh_expires_at')
                 ->where('oauth_refresh_expires_at', '<=', now()->addDays(self::CLAUDE_WARNING_DAYS)))
@@ -51,19 +52,19 @@ final class ExpiringAccountsQuery
                 'account_id' => $account->id,
                 'email' => $account->email,
                 'name' => $account->name,
-                'provider' => 'claude',
+                'provider' => Provider::Claude,
                 'label' => 'expires '.$account->claudeCredential->oauth_refresh_expires_at->diffForHumans(),
                 'deadline' => $account->claudeCredential->oauth_refresh_expires_at,
             ]);
     }
 
     /**
-     * @return Collection<int, array{account_id:int, email:?string, name:?string, provider:string, label:string, deadline:?Carbon}>
+     * @return Collection<int, array{account_id:int, email:?string, name:?string, provider:Provider, label:string, deadline:?Carbon}>
      */
     private function codexRows(): Collection
     {
         return Account::query()
-            ->where('provider', 'codex')
+            ->where('provider', Provider::Codex)
             ->whereHas('codexCredential', function ($query): void {
                 $query->where(function ($q): void {
                     $q->whereNotNull('earliest_refresh_at')->where('earliest_refresh_at', '<=', now());
@@ -77,7 +78,7 @@ final class ExpiringAccountsQuery
                 'account_id' => $account->id,
                 'email' => $account->email,
                 'name' => $account->name,
-                'provider' => 'codex',
+                'provider' => Provider::Codex,
                 'label' => "hasn't refreshed recently — may need attention",
                 'deadline' => null,
             ]);

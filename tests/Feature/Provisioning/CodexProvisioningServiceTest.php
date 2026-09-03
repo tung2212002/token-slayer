@@ -3,6 +3,7 @@
 use App\Enums\AccountStatus;
 use App\Enums\GrantStatus;
 use App\Enums\MembershipStatus;
+use App\Enums\Provider;
 use App\Exceptions\CodexConnectException;
 use App\Models\Account;
 use App\Models\User;
@@ -39,7 +40,7 @@ function fakeCodexAuthJson(): array
 it('connects a new Codex account, decoding identity from id_token', function (): void {
     $account = app(CodexProvisioningService::class)->connectAccount(fakeCodexAuthJson(), 'Company ChatGPT');
 
-    expect($account->provider)->toBe('codex')
+    expect($account->provider)->toBe(Provider::Codex)
         ->and($account->name)->toBe('Company ChatGPT')
         ->and($account->email)->toBe('shared@example.com');
 
@@ -85,7 +86,7 @@ it('connects a Codex account whose email already belongs to an existing Claude a
 
     $account = app(CodexProvisioningService::class)->connectAccount(fakeCodexAuthJson(), 'Company ChatGPT');
 
-    expect($account->provider)->toBe('codex')
+    expect($account->provider)->toBe(Provider::Codex)
         ->and($account->email)->toBe('shared@example.com')
         ->and(Account::where('email', 'shared@example.com')->count())->toBe(2);
 });

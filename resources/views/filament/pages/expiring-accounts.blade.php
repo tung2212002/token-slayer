@@ -19,8 +19,8 @@
                             <tr style="border-top:1px solid rgba(120,120,140,.15);">
                                 <td style="padding:.4rem .6rem;">{{ $row['name'] ?? $row['email'] ?? '— unnamed —' }}</td>
                                 <td style="padding:.4rem .6rem;">
-                                    <x-filament::badge :color="$row['provider'] === 'codex' ? 'gray' : 'primary'">
-                                        {{ ucfirst($row['provider']) }}
+                                    <x-filament::badge :color="$row['provider']->getColor()">
+                                        {{ $row['provider']->getLabel() }}
                                     </x-filament::badge>
                                 </td>
                                 <td style="padding:.4rem .6rem; opacity:.85;">{{ $row['label'] }}</td>

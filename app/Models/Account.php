@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\AccountPlan;
 use App\Enums\AccountStatus;
 use App\Enums\MembershipStatus;
+use App\Enums\Provider;
 use App\Models\Contracts\CredentialsProvider;
 use App\Services\CodexUsageProber;
 use App\Support\CacheKeys;
@@ -38,6 +39,18 @@ class Account extends Model
     protected $attributes = [
         'provider' => 'claude',
     ];
+
+    /**
+     * Get the attributes that should be cast.
+     *
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'provider' => Provider::class,
+        ];
+    }
 
     /**
      * Keep the resolver's email and organization-uuid maps, and this
@@ -170,7 +183,7 @@ class Account extends Model
     protected function credential(): Attribute
     {
         return Attribute::make(
-            get: fn (): ?CredentialsProvider => $this->provider === 'codex'
+            get: fn (): ?CredentialsProvider => $this->provider === Provider::Codex
                 ? $this->codexCredential
                 : $this->claudeCredential,
         );
@@ -409,7 +422,7 @@ class Account extends Model
     {
         return Attribute::make(
             get: fn (): AccountStatus => $this->credential?->credentialStatus()
-                ?? ($this->provider === 'codex' ? AccountStatus::NeedsReauth : AccountStatus::Active),
+                ?? ($this->provider === Provider::Codex ? AccountStatus::NeedsReauth : AccountStatus::Active),
             set: function (AccountStatus $value): array {
                 $this->claudeCredentialForWrite()->status = $value;
 

@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\AccountStatus;
+use App\Enums\Provider;
 use App\Exceptions\CodexConnectException;
 use App\Models\Account;
 use App\Models\CodexCredential;
@@ -86,7 +87,7 @@ it('poll() connects the account and returns done once the token endpoint reports
     $result = app(CodexConnectService::class)->poll($started['state'], 'Company ChatGPT');
 
     expect($result->status)->toBe('done')
-        ->and($result->account->provider)->toBe('codex')
+        ->and($result->account->provider)->toBe(Provider::Codex)
         ->and($result->account->email)->toBe('shared@example.com')
         ->and($result->account->codexCredential->earliest_refresh_at)->not->toBeNull();
 });

@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Accounts;
 use App\Enums\AccountPlan;
 use App\Enums\AccountStatus;
 use App\Enums\CodexPlan;
+use App\Enums\Provider;
 use App\Exceptions\AccountConnectException;
 use App\Filament\Resources\Accounts\Pages\CreateAccount;
 use App\Filament\Resources\Accounts\Pages\EditAccount;
@@ -16,10 +17,9 @@ use App\Filament\Resources\Accounts\RelationManagers\ProvisionsRelationManager;
 use App\Models\Account;
 use App\Models\ClaudeCredential;
 use App\Services\AccountConnectService;
+use App\Services\Accounts\PlanBadgeResolver;
 use App\Services\Accounts\PlanResolver;
-use App\Services\CodexConnectService;
-use App\Services\CodexUsageProber;
-use App\Services\UsageProber;
+use App\Services\ProviderServiceFactory;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
@@ -81,7 +81,7 @@ class AccountResource extends Resource
                     ->required()
                     ->unique(
                         ignoreRecord: true,
-                        modifyRuleUsing: fn (Unique $rule): Unique => $rule->where('provider', 'claude'),
+                        modifyRuleUsing: fn (Unique $rule): Unique => $rule->where('provider', Provider::Claude),
                     )
                     ->maxLength(255)
                     ->disabledOn('edit'),
@@ -134,9 +134,7 @@ class AccountResource extends Resource
                     ->toggleable(),
                 TextColumn::make('plan')
                     ->badge()
-                    ->state(fn (Account $record): AccountPlan|CodexPlan|null => $record->provider === 'codex'
-                        ? CodexPlan::tryFrom($record->codexCredential?->plan_type ?? '')
-                        : $record->plan)
+                    ->state(fn (Account $record): AccountPlan|CodexPlan|null => app(PlanBadgeResolver::class)->for($record))
                     ->placeholder('Unknown'),
                 TextColumn::make('tracked_users_count')
                     ->counts('trackedUsers')
@@ -211,19 +209,19 @@ class AccountResource extends Resource
                     ->placeholder('—'),
                 TextEntry::make('plan')
                     ->badge()
-                    ->visible(fn (Account $record): bool => $record->provider === 'claude'),
+                    ->visible(fn (Account $record): bool => $record->provider === Provider::Claude),
                 TextEntry::make('organization_type')
                     ->label('Org type')
                     ->placeholder('—')
-                    ->visible(fn (Account $record): bool => $record->provider === 'claude'),
+                    ->visible(fn (Account $record): bool => $record->provider === Provider::Claude),
                 TextEntry::make('rate_limit_tier')
                     ->label('Rate limit tier')
                     ->placeholder('—')
-                    ->visible(fn (Account $record): bool => $record->provider === 'claude'),
+                    ->visible(fn (Account $record): bool => $record->provider === Provider::Claude),
                 TextEntry::make('codexCredential.plan_type')
                     ->label('Codex plan')
                     ->placeholder('—')
-                    ->visible(fn (Account $record): bool => $record->provider === 'codex'),
+                    ->visible(fn (Account $record): bool => $record->provider === Provider::Codex),
                 TextEntry::make('status')
                     ->badge(),
                 TextEntry::make('last_probed_at')
@@ -248,7 +246,7 @@ class AccountResource extends Resource
         return Action::make('connect')
             ->label('Connect')
             ->icon(Heroicon::OutlinedLink)
-            ->visible(fn (Account $record): bool => $record->provider === 'claude' && $record->status !== AccountStatus::Active)
+            ->visible(fn (Account $record): bool => $record->provider === Provider::Claude && $record->status !== AccountStatus::Active)
             ->modalHeading('Re-connect Claude account')
             ->modalDescription('Open the authorize URL, approve access, then paste the code back here. You must authorize the same account this row represents.')
             ->modalSubmitActionLabel('Complete connect')
@@ -299,8 +297,8 @@ class AccountResource extends Resource
     /**
      * Build the "Refresh now" record action: runs the usage prober against the
      * account on demand and reports the fresh 5h/7d utilization, or the recorded
-     * probe error. Delegates to {@see UsageProber} (Claude) or
-     * {@see CodexUsageProber} (Codex).
+     * probe error. Delegates to the provider's prober via
+     * {@see ProviderServiceFactory::proberFor()}.
      *
      * @return Action
      */
@@ -310,9 +308,7 @@ class AccountResource extends Resource
             ->label('Refresh now')
             ->icon(Heroicon::OutlinedArrowPath)
             ->action(function (Account $record): void {
-                $snapshot = $record->provider === 'codex'
-                    ? app(CodexUsageProber::class)->probe($record)
-                    : app(UsageProber::class)->probe($record);
+                $snapshot = app(ProviderServiceFactory::class)->proberFor($record)->probe($record);
 
                 if ($snapshot === null) {
                     Notification::make()
@@ -351,11 +347,7 @@ class AccountResource extends Resource
             ->modalDescription('Wipes the stored access and refresh tokens immediately and marks the account as needing re-auth. If the token may be compromised, this alone is NOT enough — also sign into this Claude account at claude.ai and revoke app access / sign out of all sessions, then Connect again for a fresh grant.')
             ->modalSubmitActionLabel('Disconnect')
             ->action(function (Account $record): void {
-                if ($record->provider === 'codex') {
-                    app(CodexConnectService::class)->disconnect($record);
-                } else {
-                    app(AccountConnectService::class)->disconnect($record);
-                }
+                app(ProviderServiceFactory::class)->disconnecterFor($record)->disconnect($record);
 
                 Notification::make()
                     ->success()
