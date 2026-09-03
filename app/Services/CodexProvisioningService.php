@@ -72,6 +72,7 @@ final class CodexProvisioningService
             'codex_access_token' => $authJson['tokens']['access_token'] ?? null,
             'codex_refresh_token' => $authJson['tokens']['refresh_token'] ?? null,
             'codex_expires_at' => $this->accessTokenExpiry($authJson),
+            'earliest_refresh_at' => $this->earliestRefreshAt($authJson),
             'last_refreshed_at' => $this->lastRefresh($authJson),
             'status' => AccountStatus::Active,
         ]);
@@ -187,6 +188,22 @@ final class CodexProvisioningService
         $exp = $this->decodeJwtClaim($authJson['tokens']['access_token'] ?? '', 'exp');
 
         return is_int($exp) ? Carbon::createFromTimestamp($exp) : null;
+    }
+
+    /**
+     * Parse the optional top-level `earliest_refresh_at` the device-code
+     * exchange response carries (a Unix timestamp) — absent entirely from
+     * CLI-sourced `auth.json` uploads, which is why this stays nullable and
+     * the caller must never assume it's populated.
+     *
+     * @param  array<string, mixed>  $authJson  the uploaded/exchanged auth data
+     * @return ?Carbon
+     */
+    private function earliestRefreshAt(array $authJson): ?Carbon
+    {
+        $value = $authJson['earliest_refresh_at'] ?? null;
+
+        return $value === null ? null : Carbon::createFromTimestamp($value);
     }
 
     /**

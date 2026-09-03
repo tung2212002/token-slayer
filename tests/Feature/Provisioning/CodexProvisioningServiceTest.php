@@ -64,6 +64,22 @@ it('codex_credentials.last_probed_at persists and reads back a real timestamp', 
     expect($account->codexCredential->fresh()->last_probed_at->timestamp)->toBe($probedAt->timestamp);
 });
 
+it('persists earliest_refresh_at onto the credential when the auth.json carries it (the device-code path)', function (): void {
+    $authJson = fakeCodexAuthJson();
+    $authJson['earliest_refresh_at'] = now()->addDays(9)->timestamp;
+
+    $account = app(CodexProvisioningService::class)->connectAccount($authJson, 'Company ChatGPT');
+
+    expect($account->codexCredential->earliest_refresh_at->timestamp)
+        ->toBe((int) $authJson['earliest_refresh_at']);
+});
+
+it('leaves earliest_refresh_at null when the auth.json does not carry it (the CLI-sourced path)', function (): void {
+    $account = app(CodexProvisioningService::class)->connectAccount(fakeCodexAuthJson(), 'Company ChatGPT');
+
+    expect($account->codexCredential->earliest_refresh_at)->toBeNull();
+});
+
 it('connects a Codex account whose email already belongs to an existing Claude account', function (): void {
     Account::factory()->create(['provider' => 'claude', 'email' => 'shared@example.com']);
 
