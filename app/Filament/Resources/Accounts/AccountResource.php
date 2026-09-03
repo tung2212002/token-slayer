@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Accounts;
 
 use App\Enums\AccountPlan;
 use App\Enums\AccountStatus;
+use App\Enums\CodexPlan;
 use App\Exceptions\AccountConnectException;
 use App\Filament\Resources\Accounts\Pages\CreateAccount;
 use App\Filament\Resources\Accounts\Pages\EditAccount;
@@ -16,6 +17,8 @@ use App\Models\Account;
 use App\Models\ClaudeCredential;
 use App\Services\AccountConnectService;
 use App\Services\Accounts\PlanResolver;
+use App\Services\CodexConnectService;
+use App\Services\CodexUsageProber;
 use App\Services\UsageProber;
 use BackedEnum;
 use Filament\Actions\Action;
@@ -120,6 +123,9 @@ class AccountResource extends Resource
     {
         return $table
             ->columns([
+                TextColumn::make('provider')
+                    ->badge()
+                    ->sortable(),
                 TextColumn::make('email')
                     ->searchable()
                     ->sortable(),
@@ -127,7 +133,11 @@ class AccountResource extends Resource
                     ->searchable()
                     ->toggleable(),
                 TextColumn::make('plan')
-                    ->badge(),
+                    ->badge()
+                    ->state(fn (Account $record): AccountPlan|CodexPlan|null => $record->provider === 'codex'
+                        ? CodexPlan::tryFrom($record->codexCredential?->plan_type ?? '')
+                        : $record->plan)
+                    ->placeholder('Unknown'),
                 TextColumn::make('tracked_users_count')
                     ->counts('trackedUsers')
                     ->label('Members')
@@ -203,10 +213,16 @@ class AccountResource extends Resource
                     ->badge(),
                 TextEntry::make('organization_type')
                     ->label('Org type')
-                    ->placeholder('—'),
+                    ->placeholder('—')
+                    ->visible(fn (Account $record): bool => $record->provider === 'claude'),
                 TextEntry::make('rate_limit_tier')
                     ->label('Rate limit tier')
-                    ->placeholder('—'),
+                    ->placeholder('—')
+                    ->visible(fn (Account $record): bool => $record->provider === 'claude'),
+                TextEntry::make('codexCredential.plan_type')
+                    ->label('Codex plan')
+                    ->placeholder('—')
+                    ->visible(fn (Account $record): bool => $record->provider === 'codex'),
                 TextEntry::make('status')
                     ->badge(),
                 TextEntry::make('last_probed_at')
@@ -231,7 +247,7 @@ class AccountResource extends Resource
         return Action::make('connect')
             ->label('Connect')
             ->icon(Heroicon::OutlinedLink)
-            ->visible(fn (Account $record): bool => $record->status !== AccountStatus::Active)
+            ->visible(fn (Account $record): bool => $record->provider === 'claude' && $record->status !== AccountStatus::Active)
             ->modalHeading('Re-connect Claude account')
             ->modalDescription('Open the authorize URL, approve access, then paste the code back here. You must authorize the same account this row represents.')
             ->modalSubmitActionLabel('Complete connect')
@@ -282,7 +298,8 @@ class AccountResource extends Resource
     /**
      * Build the "Refresh now" record action: runs the usage prober against the
      * account on demand and reports the fresh 5h/7d utilization, or the recorded
-     * probe error. Delegates all work to {@see UsageProber}.
+     * probe error. Delegates to {@see UsageProber} (Claude) or
+     * {@see CodexUsageProber} (Codex).
      *
      * @return Action
      */
@@ -292,7 +309,9 @@ class AccountResource extends Resource
             ->label('Refresh now')
             ->icon(Heroicon::OutlinedArrowPath)
             ->action(function (Account $record): void {
-                $snapshot = app(UsageProber::class)->probe($record);
+                $snapshot = $record->provider === 'codex'
+                    ? app(CodexUsageProber::class)->probe($record)
+                    : app(UsageProber::class)->probe($record);
 
                 if ($snapshot === null) {
                     Notification::make()
@@ -331,7 +350,11 @@ class AccountResource extends Resource
             ->modalDescription('Wipes the stored access and refresh tokens immediately and marks the account as needing re-auth. If the token may be compromised, this alone is NOT enough — also sign into this Claude account at claude.ai and revoke app access / sign out of all sessions, then Connect again for a fresh grant.')
             ->modalSubmitActionLabel('Disconnect')
             ->action(function (Account $record): void {
-                app(AccountConnectService::class)->disconnect($record);
+                if ($record->provider === 'codex') {
+                    app(CodexConnectService::class)->disconnect($record);
+                } else {
+                    app(AccountConnectService::class)->disconnect($record);
+                }
 
                 Notification::make()
                     ->success()

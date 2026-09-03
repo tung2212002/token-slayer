@@ -51,7 +51,7 @@ final class CodexProvisioningService
     {
         $chatgptAccountId = $this->identity($authJson, 'chatgpt_account_id');
         if ($chatgptAccountId === null) {
-            throw new CodexConnectException('missing chatgpt_account_id in the uploaded auth.json');
+            throw new CodexConnectException('codex_connect_invalid_authjson', 'missing chatgpt_account_id in the uploaded auth.json');
         }
 
         $credential = CodexCredential::query()->where('chatgpt_account_id', $chatgptAccountId)->first();
@@ -72,6 +72,7 @@ final class CodexProvisioningService
             'codex_access_token' => $authJson['tokens']['access_token'] ?? null,
             'codex_refresh_token' => $authJson['tokens']['refresh_token'] ?? null,
             'codex_expires_at' => $this->accessTokenExpiry($authJson),
+            'earliest_refresh_at' => $this->earliestRefreshAt($authJson),
             'last_refreshed_at' => $this->lastRefresh($authJson),
             'status' => AccountStatus::Active,
         ]);
@@ -101,7 +102,7 @@ final class CodexProvisioningService
     {
         $chatgptAccountId = $this->identity($authJson, 'chatgpt_account_id');
         if ($chatgptAccountId === null || $chatgptAccountId !== $account->codexCredential?->chatgpt_account_id) {
-            throw new CodexConnectException('the uploaded auth.json does not match the target account');
+            throw new CodexConnectException('codex_connect_identity_mismatch', 'the uploaded auth.json does not match the target account');
         }
 
         $device = $this->accounts->resolveProvisionTarget($user, null);
@@ -187,6 +188,22 @@ final class CodexProvisioningService
         $exp = $this->decodeJwtClaim($authJson['tokens']['access_token'] ?? '', 'exp');
 
         return is_int($exp) ? Carbon::createFromTimestamp($exp) : null;
+    }
+
+    /**
+     * Parse the optional top-level `earliest_refresh_at` the device-code
+     * exchange response carries (a Unix timestamp) — absent entirely from
+     * CLI-sourced `auth.json` uploads, which is why this stays nullable and
+     * the caller must never assume it's populated.
+     *
+     * @param  array<string, mixed>  $authJson  the uploaded/exchanged auth data
+     * @return ?Carbon
+     */
+    private function earliestRefreshAt(array $authJson): ?Carbon
+    {
+        $value = $authJson['earliest_refresh_at'] ?? null;
+
+        return $value === null ? null : Carbon::createFromTimestamp($value);
     }
 
     /**

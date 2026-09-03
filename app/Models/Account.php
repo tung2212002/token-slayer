@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\AccountPlan;
 use App\Enums\AccountStatus;
 use App\Enums\MembershipStatus;
+use App\Models\Contracts\CredentialsProvider;
 use App\Support\CacheKeys;
 use Database\Factories\AccountFactory;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -155,6 +156,23 @@ class Account extends Model
     public function codexCredential(): HasOne
     {
         return $this->hasOne(CodexCredential::class);
+    }
+
+    /**
+     * The `CredentialsProvider` this account's provider-agnostic accessors
+     * (`status`, `lastProbedAt`, `probeError`) read from: `codexCredential`
+     * for a Codex account, `claudeCredential` for everything else. The
+     * single branch point every one of those accessors goes through.
+     *
+     * @return Attribute<?CredentialsProvider, never>
+     */
+    protected function credential(): Attribute
+    {
+        return Attribute::make(
+            get: fn (): ?CredentialsProvider => $this->provider === 'codex'
+                ? $this->codexCredential
+                : $this->claudeCredential,
+        );
     }
 
     /**
@@ -355,16 +373,21 @@ class Account extends Model
     }
 
     /**
-     * Proxies to `claudeCredential.status`, defaulting to Active (mirroring
-     * the DB-level default the raw column used to carry) when no credential
-     * row exists yet.
+     * Proxies to `credential.status` (Claude or Codex, per provider),
+     * defaulting to Active for a credential-less Claude account (mirroring
+     * the DB-level default the raw column used to carry) or NeedsReauth for
+     * a credential-less Codex account (which genuinely isn't usable yet —
+     * unlike Claude, a Codex account is never created without its
+     * credential in the same request, so this default only matters for a
+     * still-mid-connect row).
      *
      * @return Attribute<AccountStatus, AccountStatus>
      */
     protected function status(): Attribute
     {
         return Attribute::make(
-            get: fn (): AccountStatus => $this->claudeCredential?->status ?? AccountStatus::Active,
+            get: fn (): AccountStatus => $this->credential?->credentialStatus()
+                ?? ($this->provider === 'codex' ? AccountStatus::NeedsReauth : AccountStatus::Active),
             set: function (AccountStatus $value): array {
                 $this->claudeCredentialForWrite()->status = $value;
 
@@ -374,14 +397,14 @@ class Account extends Model
     }
 
     /**
-     * Proxies to `claudeCredential.last_probed_at`.
+     * Proxies to `credential.last_probed_at` (Claude or Codex, per provider).
      *
      * @return Attribute<?Carbon, mixed>
      */
     protected function lastProbedAt(): Attribute
     {
         return Attribute::make(
-            get: fn (): ?Carbon => $this->claudeCredential?->last_probed_at,
+            get: fn (): ?Carbon => $this->credential?->credentialLastProbedAt(),
             set: function (mixed $value): array {
                 $this->claudeCredentialForWrite()->last_probed_at = $value;
 
@@ -391,14 +414,14 @@ class Account extends Model
     }
 
     /**
-     * Proxies to `claudeCredential.probe_error`.
+     * Proxies to `credential.probe_error` (Claude or Codex, per provider).
      *
      * @return Attribute<?string, ?string>
      */
     protected function probeError(): Attribute
     {
         return Attribute::make(
-            get: fn (): ?string => $this->claudeCredential?->probe_error,
+            get: fn (): ?string => $this->credential?->credentialProbeError(),
             set: function (?string $value): array {
                 $this->claudeCredentialForWrite()->probe_error = $value;
 

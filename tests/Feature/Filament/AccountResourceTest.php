@@ -2,6 +2,7 @@
 
 use App\Enums\AccountPlan;
 use App\Enums\AccountStatus;
+use App\Enums\CodexPlan;
 use App\Enums\MembershipStatus;
 use App\Filament\Resources\Accounts\Pages\CreateAccount;
 use App\Filament\Resources\Accounts\Pages\EditAccount;
@@ -12,9 +13,11 @@ use App\Filament\Resources\Accounts\RelationManagers\ProvisionsRelationManager;
 use App\Models\Account;
 use App\Models\AccountProvisionedGrant;
 use App\Models\AccountUsageSnapshot;
+use App\Models\CodexCredential;
 use App\Models\Device;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Livewire\Livewire;
 
 uses(RefreshDatabase::class);
@@ -257,4 +260,66 @@ it('renders the resolved plan and raw profile fields on the account infolist', f
         ->test(ViewAccount::class, ['record' => $account->getRouteKey()])
         ->assertSee('Max 5x')
         ->assertSee('default_claude_max_5x');
+});
+
+it('shows the Codex plan_type instead of Claude org-type/rate-limit-tier on a Codex account infolist', function (): void {
+    $admin = User::factory()->admin()->create();
+    $account = Account::factory()->create(['provider' => 'codex']);
+    CodexCredential::factory()->for($account)->create(['plan_type' => 'pro']);
+
+    Livewire::actingAs($admin)
+        ->test(ViewAccount::class, ['record' => $account->getRouteKey()])
+        ->assertSee('pro')
+        ->assertDontSee('Rate limit tier');
+});
+
+it('the index table renders a provider column with the correct value per row', function (): void {
+    $admin = User::factory()->admin()->create();
+    $claude = Account::factory()->create(['provider' => 'claude', 'email' => 'claude@example.com']);
+    $codex = Account::factory()->create(['provider' => 'codex', 'email' => 'codex@example.com']);
+    CodexCredential::factory()->for($codex)->create();
+
+    Livewire::actingAs($admin)
+        ->test(ListAccounts::class)
+        ->assertTableColumnStateSet('provider', 'claude', record: $claude)
+        ->assertTableColumnStateSet('provider', 'codex', record: $codex);
+});
+
+it('the plan column renders the CodexPlan badge for a Codex row', function (): void {
+    $admin = User::factory()->admin()->create();
+    $codex = Account::factory()->create(['provider' => 'codex']);
+    CodexCredential::factory()->for($codex)->create(['plan_type' => 'pro']);
+
+    Livewire::actingAs($admin)
+        ->test(ListAccounts::class)
+        ->assertTableColumnStateSet('plan', CodexPlan::Pro, record: $codex);
+});
+
+it('Refresh now on a Codex row calls CodexUsageProber, not the Claude UsageProber', function (): void {
+    $admin = User::factory()->admin()->create();
+    $codex = Account::factory()->create(['provider' => 'codex']);
+    CodexCredential::factory()->for($codex)->create(['codex_access_token' => 'fake-token']);
+    $fixture = json_decode(file_get_contents(base_path('tests/fixtures/codex/usage.json')), true);
+    Http::fake(['chatgpt.com/backend-api/wham/usage' => Http::response($fixture, 200)]);
+
+    Livewire::actingAs($admin)
+        ->test(ListAccounts::class)
+        ->assertTableActionVisible('refreshNow', $codex)
+        ->callTableAction('refreshNow', $codex)
+        ->assertNotified();
+
+    expect($codex->fresh()->last_probed_at)->not->toBeNull();
+});
+
+it('Disconnect on a Codex row calls CodexConnectService, not AccountConnectService', function (): void {
+    $admin = User::factory()->admin()->create();
+    $codex = Account::factory()->create(['provider' => 'codex']);
+    CodexCredential::factory()->for($codex)->create(['codex_access_token' => 'fake-token', 'codex_refresh_token' => 'refresh-1']);
+    Http::fake(['auth.openai.com/oauth/revoke' => Http::response([], 200)]);
+
+    Livewire::actingAs($admin)
+        ->test(ListAccounts::class)
+        ->callTableAction('disconnect', $codex);
+
+    expect($codex->fresh()->codexCredential->codex_access_token)->toBeNull();
 });

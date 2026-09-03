@@ -54,6 +54,32 @@ it('connects a new Codex account, decoding identity from id_token', function ():
         ->and($credential->last_refreshed_at->toIso8601String())->toBe('2026-01-01T00:00:00+00:00');
 });
 
+it('codex_credentials.last_probed_at persists and reads back a real timestamp', function (): void {
+    $account = app(CodexProvisioningService::class)->connectAccount(fakeCodexAuthJson(), 'Company ChatGPT');
+    $probedAt = now();
+
+    $account->codexCredential->last_probed_at = $probedAt;
+    $account->codexCredential->save();
+
+    expect($account->codexCredential->fresh()->last_probed_at->timestamp)->toBe($probedAt->timestamp);
+});
+
+it('persists earliest_refresh_at onto the credential when the auth.json carries it (the device-code path)', function (): void {
+    $authJson = fakeCodexAuthJson();
+    $authJson['earliest_refresh_at'] = now()->addDays(9)->timestamp;
+
+    $account = app(CodexProvisioningService::class)->connectAccount($authJson, 'Company ChatGPT');
+
+    expect($account->codexCredential->earliest_refresh_at->timestamp)
+        ->toBe((int) $authJson['earliest_refresh_at']);
+});
+
+it('leaves earliest_refresh_at null when the auth.json does not carry it (the CLI-sourced path)', function (): void {
+    $account = app(CodexProvisioningService::class)->connectAccount(fakeCodexAuthJson(), 'Company ChatGPT');
+
+    expect($account->codexCredential->earliest_refresh_at)->toBeNull();
+});
+
 it('connects a Codex account whose email already belongs to an existing Claude account', function (): void {
     Account::factory()->create(['provider' => 'claude', 'email' => 'shared@example.com']);
 
@@ -101,8 +127,24 @@ it('rejects a Step B upload whose chatgpt_account_id does not match the target a
         'https://api.openai.com/auth' => ['chatgpt_account_id' => 'different-acct'],
     ])).'.s';
 
-    expect(fn () => app(CodexProvisioningService::class)->provisionForDevice($account, $user, $mismatched))
-        ->toThrow(CodexConnectException::class);
+    try {
+        app(CodexProvisioningService::class)->provisionForDevice($account, $user, $mismatched);
+        test()->fail('expected a CodexConnectException');
+    } catch (CodexConnectException $exception) {
+        expect($exception->reason)->toBe('codex_connect_identity_mismatch');
+    }
+});
+
+it('rejects an upload whose id_token carries no chatgpt_account_id, with a machine-readable reason', function (): void {
+    $badAuthJson = fakeCodexAuthJson();
+    $badAuthJson['tokens']['id_token'] = 'h.'.base64_encode(json_encode(['email' => 'x@example.com'])).'.s';
+
+    try {
+        app(CodexProvisioningService::class)->connectAccount($badAuthJson, 'Company ChatGPT');
+        test()->fail('expected a CodexConnectException');
+    } catch (CodexConnectException $exception) {
+        expect($exception->reason)->toBe('codex_connect_invalid_authjson');
+    }
 });
 
 it('revoke calls the OpenAI revoke endpoint with the cached refresh token, then marks the grant revoked', function (): void {
