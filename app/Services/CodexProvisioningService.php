@@ -51,7 +51,7 @@ final class CodexProvisioningService
     {
         $chatgptAccountId = $this->identity($authJson, 'chatgpt_account_id');
         if ($chatgptAccountId === null) {
-            throw new CodexConnectException('missing chatgpt_account_id in the uploaded auth.json');
+            throw new CodexConnectException('codex_connect_invalid_authjson', 'missing chatgpt_account_id in the uploaded auth.json');
         }
 
         $credential = CodexCredential::query()->where('chatgpt_account_id', $chatgptAccountId)->first();
@@ -101,7 +101,7 @@ final class CodexProvisioningService
     {
         $chatgptAccountId = $this->identity($authJson, 'chatgpt_account_id');
         if ($chatgptAccountId === null || $chatgptAccountId !== $account->codexCredential?->chatgpt_account_id) {
-            throw new CodexConnectException('the uploaded auth.json does not match the target account');
+            throw new CodexConnectException('codex_connect_identity_mismatch', 'the uploaded auth.json does not match the target account');
         }
 
         $device = $this->accounts->resolveProvisionTarget($user, null);

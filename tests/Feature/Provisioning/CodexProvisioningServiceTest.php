@@ -111,8 +111,24 @@ it('rejects a Step B upload whose chatgpt_account_id does not match the target a
         'https://api.openai.com/auth' => ['chatgpt_account_id' => 'different-acct'],
     ])).'.s';
 
-    expect(fn () => app(CodexProvisioningService::class)->provisionForDevice($account, $user, $mismatched))
-        ->toThrow(CodexConnectException::class);
+    try {
+        app(CodexProvisioningService::class)->provisionForDevice($account, $user, $mismatched);
+        test()->fail('expected a CodexConnectException');
+    } catch (CodexConnectException $exception) {
+        expect($exception->reason)->toBe('codex_connect_identity_mismatch');
+    }
+});
+
+it('rejects an upload whose id_token carries no chatgpt_account_id, with a machine-readable reason', function (): void {
+    $badAuthJson = fakeCodexAuthJson();
+    $badAuthJson['tokens']['id_token'] = 'h.'.base64_encode(json_encode(['email' => 'x@example.com'])).'.s';
+
+    try {
+        app(CodexProvisioningService::class)->connectAccount($badAuthJson, 'Company ChatGPT');
+        test()->fail('expected a CodexConnectException');
+    } catch (CodexConnectException $exception) {
+        expect($exception->reason)->toBe('codex_connect_invalid_authjson');
+    }
 });
 
 it('revoke calls the OpenAI revoke endpoint with the cached refresh token, then marks the grant revoked', function (): void {
