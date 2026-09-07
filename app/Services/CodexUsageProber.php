@@ -107,8 +107,6 @@ class CodexUsageProber implements UsageProberContract
         $snapshot = $account->usageSnapshots()->create([
             'util_5h' => $this->roundedUtilization($session),
             'util_7d' => $this->roundedUtilization($weekly),
-            'util_7d_sonnet' => null,
-            'util_7d_oi' => null,
             'reset_5h_at' => $this->parseResetsAt($session),
             'reset_7d_at' => $this->parseResetsAt($weekly),
             'raw' => $usage,
@@ -154,12 +152,12 @@ class CodexUsageProber implements UsageProberContract
             }
         }
 
-        if ($session === null && $primary !== null && isset($primary['used_percent']) && $this->classifyDuration($primary) === null) {
-            $session = $primary;
-        }
-        if ($weekly === null && $secondary !== null && isset($secondary['used_percent']) && $this->classifyDuration($secondary) === null) {
-            $weekly = $secondary;
-        }
+        // A window whose duration matches neither known shape is deliberately
+        // filed under neither. It used to fall back into the session slot,
+        // which put a free-tier account's 30-day cap behind a "5H" label with
+        // nothing on screen to say otherwise. `raw` keeps every window, and
+        // {@see \App\Services\Accounts\CodexUsageWindows} reads them back
+        // with the duration each one actually reports.
 
         return [$session, $weekly];
     }

@@ -164,7 +164,7 @@ it('pipes the event body into curl over stdin in the bundled hook, not as an arg
     $script = $this->get(route('install-script-ps1'))->content();
 
     expect($script)
-        ->toContain('printf \'%s\' "$BODY" | curl -s --max-time 3 -X POST "$URL"')
+        ->toContain('printf \'%s\' "$BODY" | curl -sf --max-time 3 -X POST "$URL"')
         ->toContain('--data-binary @-')
         ->not->toContain('-d "$BODY"');
 });
@@ -177,7 +177,7 @@ it('never falls back to a system jq inside the Windows hook -- every jq call res
         ->toContain('JQ="$HOME/.config/__TS_NAMESPACE__/bin/jq.exe"');
 
     $resolverPos = strpos($script, 'JQ="$HOME/.config/__TS_NAMESPACE__/bin/jq.exe"');
-    $firstJqCallPos = strpos($script, '"$JQ" -r \'.transcript_path');
+    $firstJqCallPos = strpos($script, '"$JQ" -r \'');
     expect($resolverPos)->not->toBeFalse()
         ->and($firstJqCallPos)->not->toBeFalse()
         ->and($resolverPos)->toBeLessThan($firstJqCallPos);
@@ -195,7 +195,10 @@ it('guards jq calls in the Windows hook template with -x (executable check), not
         ->not->toContain('[ -n "$JQ" ]')
         ->toContain('[ -x "$JQ" ]; then');
 
-    expect(substr_count($script, '[ -x "$JQ" ]'))->toBe(2);
+    // Four now: the SubagentStop session_id fold-in, transcript enrichment,
+    // the post-resolve_account body merge, and the payload filter the
+    // Windows hook previously did not have at all.
+    expect(substr_count($script, '[ -x "$JQ" ]'))->toBe(4);
 });
 
 it('bakes SLAYER_INSTALL_URL and SLAYER_NS into the Windows .cmd shims', function () {
