@@ -12,11 +12,9 @@ use App\Support\ModelName;
  * card reads from.
  *
  * Deliberately separate from {@see TokensByModelQuery}, which groups on the
- * raw stored id and knows nothing about who spent it, and from
- * {@see TokensByUserAndModelQuery}, which ranks users globally first. Ranking
- * globally is exactly what this must not do: a developer who runs one model
- * and nothing else never reaches an overall top-N, yet can be that model's
- * entire story.
+ * raw stored id and knows nothing about who spent it. Also deliberately does
+ * NOT rank users globally first: a developer who runs one model and nothing
+ * else never reaches an overall top-N, yet can be that model's entire story.
  */
 final class ModelContributorsQuery
 {
@@ -42,6 +40,15 @@ final class ModelContributorsQuery
     public function get(UsageFilters $filters, int $topUsers): array
     {
         $rows = $this->scopeEvents($filters)
+            // "Unknown" (no model recorded) is not a model to compare against
+            // real ones -- it is an artifact of pre-tracking history and
+            // un-updated clients, and on a wide range it can dwarf every real
+            // total, stretching the axis until every actual bar reads flat.
+            // The widget's description line already carries this exact signal
+            // as a percentage ({@see TokensByModelQuery::unknownShare()}); a
+            // bar here would only duplicate it while defeating the chart's
+            // one job of comparing models against each other.
+            ->whereNotNull('events.model')
             ->join('users', 'users.id', '=', 'events.user_id')
             ->groupBy('events.model', 'users.id', 'users.slack_handle', 'users.display_name', 'users.name')
             ->selectRaw('events.model as model')
